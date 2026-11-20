@@ -4,24 +4,73 @@ A bedtime story generator for ages 5–10. A short request becomes a written, **
 
 ## System
 
+**A new story**
+
 ```mermaid
 flowchart TD
-    U(["Parent"]) -->|"request + controls (+ child profile in the CLI)"| UI["Streamlit UI / CLI"]
-    UI --> A["Request check<br/>tell as asked · soften · redirect"]
-    A -->|"out of scope"| X["Friendly redirect"]
-    X --> UI
-    A -->|"ok / adjusted"| W["Writer<br/>story + notes on changes"]
-    W --> C["Code checks<br/>length · reading level · avoid-list"]
-    C --> J["Judge<br/>must-fix problems + scores"]
-    J --> D{"Passed, or<br/>3 reviews done?"}
-    D -->|"no"| R["Reviser"]
-    R --> C
-    D -->|"yes"| S["Select best draft"]
-    S --> UI
-    UI -->|"follow-up"| G["Avoid-list guard (code)<br/>+ router: edit · new · off-topic"]
-    G -->|"edit: parent's own words"| R
-    G -->|"new story"| A
+    P(["Parent: a request + story controls"])
+    RC["<b>1 · Request check</b><br/>tell as asked · soften · redirect"]
+    X(["Friendly redirect"])
+    W["<b>2 · Writer</b><br/>the story + a note on anything changed"]
+    subgraph loop ["Review loop · up to 3 reviews"]
+        C["<b>3 · Code checks</b><br/>length · reading level · avoid-list"]
+        J["<b>4 · Judge</b><br/>must-fix problems + 1–5 scores"]
+        G{"<b>5 · Pass?</b><br/>decided in code"}
+        R["<b>6 · Reviser</b><br/>fixes only what was flagged"]
+        C --> J --> G
+        G -->|"no, and a review is left"| R
+        R -->|"check again"| C
+    end
+    B["<b>7 · Keep the best draft</b>"]
+    S(["Story, notes and how it was made"])
+
+    P --> RC
+    RC -->|"off-topic or can't be made suitable"| X
+    RC -->|"fine as asked, or softened"| W
+    W --> C
+    G -->|"yes, or no reviews left"| B
+    B --> S
+
+    classDef llm fill:#e7eefc,stroke:#4a6fdc,color:#14213d
+    classDef code fill:#fdf1df,stroke:#c98a2b,color:#3d2a0f
+    classDef io fill:#eef7ee,stroke:#5a9a5a,color:#173317
+    class RC,W,J,R llm
+    class C,G,B code
+    class P,X,S io
 ```
+
+**A follow-up**
+
+```mermaid
+flowchart TD
+    F1(["Parent types a change"])
+    K["<b>Avoid-list guard</b><br/>avoided items are always left out"]
+    Q["<b>Router</b><br/>edit · new story · off-topic"]
+    N(["A new story, from step 1"])
+    X(["Friendly redirect; story unchanged"])
+    F2(["Parent taps a quick action<br/>or changes a setting"])
+    E["<b>Reviser</b><br/>gets the parent's own words"]
+    L["<b>Review loop</b><br/>steps 3–7 above"]
+    V(["A new version; earlier versions are kept"])
+
+    F1 --> K --> Q
+    Q -->|"edit"| E
+    Q -->|"new story"| N
+    Q -->|"off-topic"| X
+    F2 --> E
+    E --> L --> V
+
+    classDef llm fill:#e7eefc,stroke:#4a6fdc,color:#14213d
+    classDef code fill:#fdf1df,stroke:#c98a2b,color:#3d2a0f
+    classDef io fill:#eef7ee,stroke:#5a9a5a,color:#173317
+    classDef ref fill:#eeeeee,stroke:#888888,color:#222222,stroke-dasharray:4 3
+    class Q,E llm
+    class K code
+    class F1,F2,N,X,V io
+    class L ref
+```
+
+Blue: a call to Claude, each with its own system prompt in `storyteller/prompts/` and a schema-validated reply · amber: plain code · green: what the parent sends and sees.
 
 | Step | Job | Why it's a separate step |
 |---|---|---|

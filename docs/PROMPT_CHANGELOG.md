@@ -1,6 +1,6 @@
 # Prompt changelog
 
-Each revision came from reading eval stories and was measured with `python -m eval.run_eval`. Scores are on a 1–5 scale, averaged over 13 scored cases (the off-topic case is redirected, not scored). Every story is re-scored by fresh judge calls. Full reports and stories are in `eval/results/v1` … `v9`.
+Each revision came from reading eval stories and was measured with `python -m eval.run_eval`. Scores are on a 1–5 scale, averaged over 13 scored cases (the off-topic case is redirected, not scored). Every story is re-scored by fresh judge calls. Full reports and stories are in `eval/results/v1` … `v10`.
 
 ## How to read the numbers across versions
 
@@ -11,8 +11,9 @@ The way stories are measured changed five times. Each change made the eval more 
 | v3 | Judge scores request match on the request's spirit *within bedtime-safe limits* (softening is never penalized) | request_match from v3 on is not comparable with v1–v2 |
 | v3 | Each story gets 2 judge calls, averaged per criterion | Stricter (a 3 from either call fails) and less noisy |
 | v7 | The eval judge gets the analyzer's adjustments, as the in-app judge does | Removes noise on softened requests |
-| v8 | The judge lists must-fix problems; a story passes with none (and no score of 2 or less). Length tolerance ±15 % → ±25 % | Headline number is problems per story; pass rates are not comparable with v1–v7 |
+| v8 | The judge lists must-fix problems; a story passes with none (and no score of 2 or less). Length tolerance ±15% → ±25% | Headline number is problems per story; pass rates are not comparable with v1–v7 |
 | v9 | The judge also checks secrets kept from parents, death described as sleep, garbled sentences and titles naming someone not in the story, and is told the real-life topic | Stricter: v9 problem counts are not comparable with v8 |
+| v10 | Issues whose own fix says "no change needed" are dropped; a softened story without a parent note fails the pass rule | Close to v9; the dropped issues were never real problems |
 
 Apart from these, the judge prompt stayed fixed while the generation prompts changed.
 
@@ -109,13 +110,13 @@ Eval fix only (see the measurement table). No generation prompt changed.
 - **Request check instead of a brief:** the analyzer only decides ok / adjusted / out of scope, what to soften (what characters do, never who they are), the language and any real-life topic. The writer makes every creative choice and writes the notes.
 - **Parent's words go to the reviser unchanged;** the follow-up router only classifies. The avoid-list is checked against follow-ups in code.
 - **Notes only when something was changed,** enforced in code.
-- **Code rules:** length ±25 %, reading level only when more than 1 grade too hard and only for English, at most 2 reviews.
+- **Code rules:** length ±25%, reading level only when more than 1 grade too hard and only for English, at most 2 reviews.
 - **Story rules:** keep every name the parent gives; characters act like what they are; spell out unsafe behavior a child might copy (cooking at the stove, leaving the house at night).
 
 **What went wrong while tuning:**
 - Banning overused names ("not Pip or Pim") made the writer correct itself mid-story: "Pim, no, not Pim." The ban was removed.
 - "Invent uncommon names" then renamed a family's real dog in a grief story. Parent-given names are now always kept.
-- A paragraph-count hint made first drafts shorter (75 % of the target instead of 88 %), so it was removed.
+- A paragraph-count hint made first drafts shorter (75% of the target instead of 88%), so it was removed.
 - Some new prompt examples matched the test cases (an owl crossing a stream, blood, spiders), which would have flattered the results. They were replaced with unrelated examples.
 
 Full reports: [eval/results/v8/report.md](../eval/results/v8/report.md) and [eval/results/v8-repeat/report.md](../eval/results/v8-repeat/report.md), with identical prompts.
@@ -131,11 +132,11 @@ Full reports: [eval/results/v8/report.md](../eval/results/v8/report.md) and [eva
 | Latency | 11 s / 10 s | 25 s / 26 s |
 
 **What the numbers say:**
-- **The two runs differ a lot with identical prompts,** so read the average: the loop cuts must-fix problems from about 0.5 to about 0.15 per story, and the pass rate rises from about 52 % to about 85 %.
+- **The two runs differ a lot with identical prompts,** so read the average: the loop cuts must-fix problems from about 0.5 to about 0.15 per story, and the pass rate rises from about 52% to about 85%.
 - **Faster and cheaper than v7** (26 s and $0.004 per story, from 42 s and $0.006), because the request check is shorter, the writer thinks less, and stories stop after 2 reviews.
 - **What remains:** stated morals (11 of 16 first-draft issues in run 2) are still the most common problem, as since v1. The app's single judge call misses some problems the eval's two calls find.
 
-## v9: fixes from reading every story and draft (current results)
+## v9: fixes from reading every story and draft
 
 **What started it.** After v8 we read every story again, including every intermediate draft and follow-up version (18 requests, 10 follow-ups, plus the eval stories), instead of relying on the judge's lists. That found:
 - **A follow-up that did nothing.** "Make it scarier, with blood" came back word for word the same; only the note changed, and it was marked "Passed review". The judge never sees the previous version.
@@ -149,9 +150,9 @@ Full reports: [eval/results/v8/report.md](../eval/results/v8/report.md) and [eva
 - Code: a follow-up whose story comes back unchanged is sent back with the parent's words; the story is written before the title (field order); length and reading level still get a revision but no longer make a story "best effort"; the writer gets 5 random name ideas from a list of uncommon names; the judge is told the real-life topic.
 - Prompts: fixes are hints that must fit the whole story; no secrets from parents; a line for when the child isn't the hero; say "died", never sleep or going away.
 - **Over-correction, then recalibration.** The broader safety wording made the judge flag ordinary independence (a girl riding in a cart, a cat hopping off a sofa, a dragon breathing a candle-sized flame), and its fixes handed the child's solution to a grown-up and added lectures ("Grown-ups first, and nobody runs ahead"). The rules now cover only what is genuinely dangerous if copied in real life, say that ordinary independence is good and creatures do what they do, and ask fixes to keep the child's own solution. The judge lists an issue only when a change is needed.
-- **Up to 3 reviews again.** With concrete must-fix issues, a second review sometimes caught a real problem ("Please don't tell the grown-ups") with no round left to fix it. A third round runs only in that case; average time is unchanged.
+- **Up to 3 reviews again.** With concrete must-fix issues, a second review sometimes caught a real problem ("Please don't tell the grown-ups") with no round left to fix it. A third round runs only when the second draft still needs a change; average time is unchanged.
 
-Full reports: [v9-3rounds](../eval/results/v9-3rounds/report.md) and [v9-3rounds-repeat](../eval/results/v9-3rounds-repeat/report.md) (identical prompts, the shipped settings). The 2-round runs [v9](../eval/results/v9/report.md) and [v9-repeat](../eval/results/v9-repeat/report.md) are kept for comparison.
+Full reports: [v9-3rounds](../eval/results/v9-3rounds/report.md) and [v9-3rounds-repeat](../eval/results/v9-3rounds-repeat/report.md) (identical prompts, 3 reviews). The 2-round runs [v9](../eval/results/v9/report.md) and [v9-repeat](../eval/results/v9-repeat/report.md) are kept for comparison.
 
 | | Writer only (no judge) | With judge loop |
 |---|---|---|
@@ -164,8 +165,8 @@ Full reports: [v9-3rounds](../eval/results/v9-3rounds/report.md) and [v9-3rounds
 | Latency | 19 s / 14 s | 33 s / 35 s |
 
 **What the numbers say:**
-- The loop roughly halves the must-fix problems (about 0.42 to about 0.21 per story) and lifts the pass rate from about 56 % to about 79 %, against a stricter checklist than v8's.
-- The two 2-round runs ended at 0.46 and 0.38 problems per story, but their first drafts also differed a lot (0.85 and 0.54), so the third round's benefit can't be separated from run-to-run noise. It's kept because it costs nothing unless a real problem is left.
+- The loop roughly halves the must-fix problems (about 0.42 to about 0.21 per story) and lifts the pass rate from about 56% to about 79%, against a stricter checklist than v8's.
+- The two 2-round runs ended at 0.46 and 0.38 problems per story, but their first drafts also differed a lot (0.85 and 0.54), so the third round's benefit can't be separated from run-to-run noise. It's kept because it costs nothing when the second draft has nothing left to fix.
 - **What remains:** the judge is still inconsistent from call to call (the same line can be flagged in one review and not the next), and stated morals and occasional over-cautious safety flags are the most common issues.
 
 ### Checking the measurement itself
@@ -184,4 +185,45 @@ Two checks on the final prompts, so the numbers above aren't only the judge grad
 | Latency | 21 s | 38 s |
 
 On fresh requests the writer alone is already very clean, so the loop's visible contribution is length and a small pass-rate gain. The problem counts are within noise: one story was the same text before and after the loop and was scored 0 and then 0.5. All 9 requests got the expected treatment (the pirate battle was softened into confetti cannons and wooden swords; the rest were told as asked).
+
+## v10: two checks moved from the judge into code (current results)
+
+**What started it.** Retaking the README screenshots on the softened "monster who eats children" request. Two runs in a row ended "best effort", and reading their reviews showed:
+- **Issues that weren't issues.** Draft 2 was sent back on two must-fix issues whose own fixes read "No change needed; this line is not a moral" and "Keep as is… no change needed". The judge prompt already says an issue needs a change (v9), but the judge still did this. Because nothing passed, the app showed draft 1, which had a real contradiction (a monster allowed "one cookie a night" eats five).
+- **A lost note.** In a later run, the third draft passed review without its parent note, so a softened story didn't tell the parent what changed. Past evals had the same slip twice (v8 and v9, both on the monster request, both after a revision), and the judge never flagged it.
+
+**Changes (code only; writer, reviser and request check prompts unchanged):**
+- An issue whose fix opens or ends with "no change needed", "keep as is" and similar is dropped. Checked against every issue recorded so far: it removes 9 of 384, all of them phantom, and keeps every real fix (including all 25 from the judge check).
+- A softened story without a note fails the pass rule, and the reviser is told to add one (the eval's pass rule counts it too).
+- The issue schema says a fix must be a change.
+
+Full reports: [v10](../eval/results/v10/report.md) and [v10-repeat](../eval/results/v10-repeat/report.md) (identical prompts, the shipped settings).
+
+| | Writer only (no judge) | With judge loop |
+|---|---|---|
+| Must-fix problems per story (run 1 / run 2) | 0.54 / 0.46 | **0.08 / 0.27** |
+| Pass rate (run 1 / run 2) | 46% / 54% | **92% / 77%** |
+| Mean score | 4.36 / 4.39 | 4.45 / 4.41 |
+| Length in range | 77% / 69% | 100% / 100% |
+| Avoid-list hits | 0 | 0 |
+| Cost per story | $0.0017 / $0.0015 | $0.0057 / $0.0045 |
+| Latency | 15 s / 13 s | 37 s / 30 s |
+
+**What the numbers say:**
+- The loop cuts must-fix problems from about 0.5 to about 0.18 per story and lifts the pass rate from about 50% to about 85%. That's close to v9 (0.42 → 0.21); the first drafts differ more between runs than between versions.
+- Every softened story ended with its note, and stated morals, the most common first-draft problem, were all fixed by the loop. Of the 9 problems left in the final stories, 8 were in stories the in-app judge had passed and a fresh judge call flagged: mostly small consistency slips (a map in two places at once), plus a note promising more than the story delivered.
+
+**Checking the measurement again.**
+- **Judge check** ([judge-check-v10](../eval/results/judge-check-v10/report.md)): 20 of 20 planted problems caught with the right kind, no false alarms in 6 calls. A first run flagged the "clean" lighthouse story, and it was right: the story said the lamp was dark, then ended with its beam sweeping the ceiling. The story was fixed and the check rerun.
+- **Held-out requests** ([v10-heldout](../eval/results/v10-heldout/report.md)), the same 9 as v9, never tuned on:
+
+| Held-out | Writer only (no judge) | With judge loop |
+|---|---|---|
+| Must-fix problems per story | 0.33 | 0.11 |
+| Pass rate | 56% | 89% |
+| Length in range | 89% | 100% |
+| Cost per story | $0.0018 | $0.0041 |
+| Latency | 16 s | 29 s |
+
+The writer alone did worse here than in v9 (0.33 against 0.06 problems, with the same writer prompt), which shows how much a single run varies; the final stories came out at 0.11 both times. All 9 requests got the expected treatment.
 

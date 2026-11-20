@@ -1,4 +1,4 @@
-"""Turns settings (age, controls, category) into concrete instruction text.
+"""Turns the child's age and the story controls into concrete instruction text, and applies quick actions.
 
 The same text goes to the writer, the reviser and the judge, so the judge scores the story
 against exactly what the writer was asked to do.

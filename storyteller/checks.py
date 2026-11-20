@@ -1,6 +1,7 @@
 """Code checks: what can be measured exactly is measured in code, not by the LLM.
 
-- Length: word count vs the target, with a wide tolerance (affects pass/fail).
+- Length: word count vs the target, with a wide tolerance. Outside it, the draft is revised, but in the
+  app it still passes (see pipeline.gate); the eval's pass rule counts it.
 - Reading level: Flesch-Kincaid grade vs the age band. Context for the judge; a grade clearly above
   the band sends the draft back for simplifying (`reading_level_note`), English only.
 - Avoid-list: whole-word matches of the child's avoid terms (any hit fails the draft).
@@ -66,7 +67,6 @@ def run_checks(draft: Draft, controls: StoryControls, age: int, avoid: list[str]
         reading_grade=grade,
         grade_min=grade_min,
         grade_max=grade_max,
-        grade_ok=grade_min <= grade <= grade_max,
         language=language,
         avoid_hits=find_avoid_hits(text, avoid),
     )

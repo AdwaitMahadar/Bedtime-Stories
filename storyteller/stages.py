@@ -7,6 +7,7 @@ tagged text is content, never instructions.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from functools import cache
 from pathlib import Path
@@ -173,7 +174,32 @@ def judge(
         _tag("story", _story(draft)),
         task="List the must-fix issues and score all 7 criteria.",
     )
-    return llm.structured(step="judge", system=load_prompt("judge"), user=user, schema=JudgeVerdict, trace=trace)
+    verdict = llm.structured(step="judge", system=load_prompt("judge"), user=user, schema=JudgeVerdict, trace=trace)
+    return drop_non_issues(verdict)
+
+
+# A fix that opens or ends like this says the issue isn't one ("No change needed; this line is not a
+# moral", "Keep it simple, but the line is fine; no change needed.").
+_NO_CHANGE_PHRASE = r"(no (change|fix|edit)s? (is |are )?(needed|required|necessary)|nothing to (fix|change))"
+_NO_CHANGE = re.compile(
+    rf"^\W*({_NO_CHANGE_PHRASE}|(keep|leave) (it |this |the line |this line )?as (it )?is)\b"
+    rf"|\b{_NO_CHANGE_PHRASE}\W*$",
+    re.IGNORECASE,
+)
+
+
+def drop_non_issues(verdict: JudgeVerdict) -> JudgeVerdict:
+    """Remove issues whose own fix says no change is needed.
+
+    The judge prompt already says an issue needs a change, but the judge still sometimes lists a
+    line and then clears it ("Keep as is"). Each one blocked a good draft from passing, and could
+    make the app show an earlier, worse draft instead. Code removes them, so pass/fail rests on
+    real problems only.
+    """
+    kept = [issue for issue in verdict.issues if not _NO_CHANGE.search(issue.fix)]
+    if len(kept) == len(verdict.issues):
+        return verdict
+    return verdict.model_copy(update={"issues": kept})
 
 
 def revise(

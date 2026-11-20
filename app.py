@@ -103,7 +103,7 @@ def pick_reason(version: StoryVersion) -> str:
     return reason
 
 
-def describe_controls(controls: StoryControls) -> str:
+def controls_summary(controls: StoryControls) -> str:
     return " · ".join(
         [f"{controls.length.title()} length"]
         + [
@@ -275,7 +275,7 @@ def set_request(text: str) -> None:
 
 def request_screen() -> None:
     st.title("What's tonight's story about?")
-    st.caption("Every story is reviewed against a checklist and revised before you see it.")
+    st.caption("Every story is reviewed against a checklist, and revised if needed, before you see it.")
 
     examples = st.container(horizontal=True)
     for example in EXAMPLES:
@@ -435,7 +435,7 @@ def show_request_check(session: StorySession, version: StoryVersion) -> None:
         lines.append(
             f"**Language:** {brief.language} (the reading-level check only works for English, so it's skipped)"
         )
-    lines.append(f"**Settings for this version:** {describe_controls(version.controls)}")
+    lines.append(f"**Settings for this version:** {controls_summary(version.controls)}")
     st.markdown("\n\n".join(lines))
     if version.instruction:
         st.markdown("**Change asked for in this version:**\n\n" + md(version.instruction))
@@ -457,7 +457,7 @@ def show_rounds(version: StoryVersion) -> None:
         "A draft passes when the reviewer finds no must-fix problem (safety, consistency, a missing request, "
         "notes that don't match, a stated moral, a lively ending, the wrong age level), no score is "
         f"{config.FAIL_MAX_SCORE}/5 or lower, and nothing from the avoid-list appears. A length or reading level "
-        "outside the range gets one revision but doesn't stop a story from passing."
+        "outside the range is revised while reviews are left, but doesn't stop a story from passing."
     )
     for index, result in enumerate(version.rounds):
         status = (

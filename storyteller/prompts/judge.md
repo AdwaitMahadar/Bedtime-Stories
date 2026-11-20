@@ -31,7 +31,7 @@ Score each criterion from 1 to 5 with a short `note`, on its own merits. 5 means
 ## How to read the inputs
 
 - <user_request> is what the parent asked for.
-- <adjustments> lists deliberate changes made to keep the story suitable. **They are correct, never penalize them.** The story fulfils the request when it delivers its spirit within those limits. Never ask for more of something that was deliberately limited, such as more fear, more danger, or more energy than a bedtime story allows. A "really scary" request is fully met by gentle, spooky atmosphere with a friendly reveal; "a monster that eats people" is fully met by a monster with a harmless, funny appetite.
+- <adjustments> lists deliberate changes made to keep the story suitable. **They are correct, never penalize them.** The story fulfills the request when it delivers its spirit within those limits. Never ask for more of something that was deliberately limited, such as more fear, more danger, or more energy than a bedtime story allows. A "really scary" request is fully met by gentle, spooky atmosphere with a friendly reveal; "a monster that eats people" is fully met by a monster with a harmless, funny appetite.
 - <controls> are the targets the writer was given.
 - <code_checks> are measured in code. Trust them; don't recount words. The reading grade is a noisy formula: use it as context for age fit, not as a verdict.
 - <parent_notes> are shown to the parent above the story.

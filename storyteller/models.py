@@ -141,7 +141,9 @@ class Issue(BaseModel):
 
     kind: IssueKind
     quote: str = Field(description="The exact words from the story or the parent notes that show the problem.")
-    fix: str = Field(description="A specific change that fixes it.")
+    fix: str = Field(
+        description="A specific change that fixes it. If no change is needed, it isn't an issue: leave it out."
+    )
 
 
 class CriterionScore(BaseModel):
@@ -211,7 +213,6 @@ class CheckResults(BaseModel):
     reading_grade: float
     grade_min: float
     grade_max: float
-    grade_ok: bool  # within the age band (display only; see checks.reading_level_note)
     language: str = "en"  # the reading-level formula only works for English
     avoid_hits: list[str]
 

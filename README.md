@@ -28,7 +28,7 @@ python main.py --request "A girl and her cat build a boat to the moon" --name Mi
 
 | Option | What it does |
 |---|---|
-| `--name`, `--age`, `--pronouns`, `--favorites`, `--avoid` | A child profile: the child becomes the hero, the writing fits their age, favourite things can appear, and avoid-list items never do |
+| `--name`, `--age`, `--pronouns`, `--favorites`, `--avoid` | A child profile: the child becomes the hero, the writing fits their age, favorite things can appear, and avoid-list items never do |
 | `--length short\|medium\|long`, `--energy`, `--silliness`, `--lesson` (1–5) | Story controls |
 | `-v` | Show each review: must-fix problems and scores |
 | `--trace` | Show every model call with tokens, time and cost |
@@ -37,7 +37,7 @@ After each story you can type a change ("make the cat grumpy at first"), use a q
 
 ## What it does
 
-- **Any request, kept safe.** Vague requests get a full story. Unsuitable ones are softened rather than refused, keeping their spirit (a monster that eats children becomes one with a harmless taste for socks), and a short note tells the parent what changed. Off-topic requests and prompt injections get a friendly redirect. Real-life worries, such as a new baby or a pet that died, are handled with gentle honesty.
+- **Any request, kept safe.** Vague requests get a full story. Unsuitable ones are softened rather than refused, keeping their spirit (a monster that eats children becomes one with a harmless taste for socks), and a short note tells the parent what changed. Off-topic requests get a friendly redirect, and instructions slipped into a request ("ignore your rules…") are ignored. Real-life worries, such as a new baby or a pet that died, are handled with gentle honesty.
 - **Controls that are checked, not just suggested.** Length, Energy, Silliness and Lesson become exact instructions. Code checks length; the judge checks the rest.
 - **Follow-ups.** Quick actions (Shorter, Longer, Funnier, Calmer, Simpler words), typed changes, or new settings. Each change is reviewed again and adds a version you can switch back to. A request for a different story starts a new one.
 - **"How this story was made".** The request check, every review with the must-fix problems and scores, and every model call with its cost.
@@ -123,20 +123,20 @@ More detail, including the decisions and known limitations: [docs/DESIGN.md](doc
 
 ## Results
 
-A story usually takes 15–40 s (about 35 s on average in the eval) and costs about half a cent.
+A story usually takes 15–40 s (about 34 s on average in the eval) and costs about half a cent.
 
 **Eval** (`python -m eval.run_eval`): 14 requests, including vague, unsafe, off-topic, prompt-injection and real-life ones. It compares the writer's first draft (one well-specified prompt on its own) with the final story after review. Every story is re-checked by two fresh judge calls. Two runs, identical settings:
 
 | | Writer only | With the judge loop |
 |---|---|---|
-| Must-fix problems per story | 0.42 / 0.42 | **0.15 / 0.27** |
-| Pass rate | 62% / 50% | **85% / 73%** |
-| Length in range | 85% / 77% | **100% / 100%** |
+| Must-fix problems per story | 0.54 / 0.46 | **0.08 / 0.27** |
+| Pass rate | 46% / 54% | **92% / 77%** |
+| Length in range | 77% / 69% | **100% / 100%** |
 | Avoid-list hits | 0 | 0 |
 
 **Checking the measurement itself:**
 - **Planted problems** (`python -m eval.judge_check`). Hand-written stories each contain one deliberate problem, plus clean ones. The judge caught the problem in 20 of 20 calls with no false alarms. The problems are clear ones; subtle slips are where it's weakest.
-- **Fresh requests** (`python -m eval.run_eval --set heldout`). 9 requests written after tuning finished, run once. The writer alone already passed 83% (89% after review), and length was in range for 100% after review.
+- **Fresh requests** (`python -m eval.run_eval --set heldout`). 9 requests written after tuning finished. The writer alone passed 56%, and 89% after review (must-fix problems 0.33 → 0.11 per story); length was in range for 100% after review.
 - **Reading every story.** `python -m eval.qa_run` runs 18 realistic requests and 10 follow-ups and writes each session out, every draft included. Reading them found what the averages hid, and most of the design changes came from that.
 
 ## How it was built
@@ -146,12 +146,13 @@ The design changed as the measurements came in, and [docs/PROMPT_CHANGELOG.md](d
 - **The judge changed from grading taste to listing must-fix problems.** Reading the stories showed it was failing drafts over things like "energy too low", then "too high", while missing a boy climbing a lamppost.
 - **A safety fix that made stories preachy was recalibrated.**
 - **Small code nudges replaced prompt bans,** for example random name ideas instead of "don't use the name Pip".
+- **Two checks moved from the judge into code** after it kept missing them: an issue whose own fix says "no change needed" is dropped, and a softened story that lost its note is sent back.
 
 ## Development
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                      # 51 tests, offline: the LLM is replaced by a scripted fake
+pytest                      # 54 tests, offline: the LLM is replaced by a scripted fake
 ruff check . && ruff format --check .
 ```
 

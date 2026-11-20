@@ -5,7 +5,7 @@ The judge is the part I trust least: it catches clear problems reliably (all 20 
 check), but the same line can be flagged in one review and missed in the next. So first I'd run two judge calls
 per review in the app and act on the union of their must-fix lists, then measure the extra time against the
 problems it catches. Second, a settings screen: the pipeline already handles a child profile (name, age,
-favourite things, an avoid-list) through the CLI, but the app has no screen for it yet, and saved defaults
+favorite things, an avoid-list) through the CLI, but the app has no screen for it yet, and saved defaults
 would make it feel personal. Third, I'd speed up the first story by running the writer while the request check
 runs, keeping the draft only if the request turns out to be fine as asked. Finally, I'd grow the held-out set
 and score a sample of stories by hand, to check the judge against a person on the subtle cases (stated morals,

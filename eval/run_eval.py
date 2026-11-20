@@ -13,9 +13,11 @@ For every case the pipeline runs once, and two of its stories are scored:
 Each story is scored by **fresh** judge calls with the same prompt (`--judge-samples`, default 2).
 The headline number is **must-fix issues per story** (safety, consistency, missing request, notes
 mismatch, stated moral, lively ending, wrong age level), averaged over calls. A story's pass rate is
-the share of calls that found no issue and no score of 2 or less (with code checks passing). Scores
-are averaged per criterion. Agreement between calls is reported as a measure of judge consistency. The judge scores from inside the loop are not reused:
-the loop keeps the best-scoring draft, so its own scores are biased upward.
+the share of calls that found no issue and no score of 2 or less (with code checks passing, including
+a note on every softened story). Scores
+are averaged per criterion. Agreement between calls is reported as a measure of judge consistency.
+The judge scores from inside the loop are not reused: the loop keeps the best draft, so its own
+scores are biased upward.
 Outputs go to `eval/results/<label>/`: report.md, stories.md, results.json.
 
 Results up to v4 also compared an older planner -> writer design, and up to v7 a story passed on
@@ -38,7 +40,7 @@ from storyteller import config, stages
 from storyteller.checks import check_failures, run_checks
 from storyteller.llm import LLM, LLMError, check_api_key, load_api_key
 from storyteller.models import CRITERIA, ChildProfile, Draft, IssueKind, StoryControls, StoryRequest, TraceEvent
-from storyteller.pipeline import StoryPipeline
+from storyteller.pipeline import StoryPipeline, note_failures
 
 EVAL_DIR = Path(__file__).parent
 VARIANTS = ("first_draft", "final")
@@ -78,7 +80,7 @@ def score(
         for _ in range(samples)
     ]
     per_criterion = {c: mean(getattr(v, c).score for v in verdicts) for c in CRITERIA}
-    measured_ok = not check_failures(checks)
+    measured_ok = not check_failures(checks) and not note_failures(draft, adjustments or [])
 
     def passes(v) -> bool:  # the eval's fixed pass definition, for one judge call
         return measured_ok and not v.issues and v.min_score > config.FAIL_MAX_SCORE

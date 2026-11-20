@@ -42,6 +42,18 @@ UNCHANGED = (
 )
 
 
+NO_NOTE = (
+    "notes_mismatch: the request was softened, but there is no parent note saying what changed. "
+    "Add one short note per change in <adjustments>."
+)
+
+
+def note_failures(draft: Draft, adjustments: list[str]) -> list[str]:
+    """A softened story must tell the parent what changed. Checked in code: in testing, a revision
+    sometimes dropped the note and the judge didn't notice."""
+    return [NO_NOTE] if adjustments and not draft.notes else []
+
+
 def gate(verdict: JudgeVerdict, checks) -> list[str]:
     """Problems that stop a draft from passing, or an empty list.
 
@@ -175,6 +187,8 @@ class StoryPipeline:
             unchanged = number == 1 and previous_text is not None and same_text(draft.text, previous_text)
             if unchanged:
                 failures.insert(0, UNCHANGED)
+            missing_note = note_failures(draft, adjustments)
+            failures += missing_note
             soft = soft_failures(checks)
             rounds.append(
                 RoundResult(
@@ -202,7 +216,7 @@ class StoryPipeline:
                 verdict=verdict,
                 checks=checks,
                 parent_request=parent_request,
-                extra_failures=[UNCHANGED] if unchanged else [],
+                extra_failures=([UNCHANGED] if unchanged else []) + missing_note,
             )
             draft = _notes_only_for_changes(draft, adjustments)
         return rounds, pick_best(rounds), stopped

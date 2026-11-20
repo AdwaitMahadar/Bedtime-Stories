@@ -68,13 +68,6 @@ def intent(kind: str = "edit", status: str = "ok", adjustments=()) -> FollowUpIn
     )
 
 
-STEP_FOR_SCHEMA = {
-    StoryBrief: "analyzer",
-    JudgeVerdict: "judge",
-    FollowUpIntent: "followup",
-}
-
-
 class FakeLLM:
     """Returns scripted responses per step, in order, and records every call."""
 

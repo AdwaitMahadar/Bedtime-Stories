@@ -1,6 +1,6 @@
 """Name ideas for characters the parent didn't name.
 
-Left alone, the model reuses a few favourites in story after story (in testing, Pip, Pim and Biscuit in
+Left alone, the model reuses a few favorite names in story after story (in testing, Pip, Pim and Biscuit in
 about one story in three, including "Sir Biscuit" and "Mistletoe Pim"). Banning names in the prompt
 backfired: the writer started a banned name and corrected itself mid-story ("Pim, no, not Pim.").
 So code offers a few random, uncommon names instead, and the writer may use them or invent others.

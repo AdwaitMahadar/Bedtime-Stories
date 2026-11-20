@@ -3,8 +3,9 @@
 import pytest
 
 from storyteller.checks import check_failures, run_checks
-from storyteller.models import ChildProfile, Draft, StoryControls, StoryRequest
-from storyteller.pipeline import UNCHANGED, StoryPipeline, gate, soft_failures
+from storyteller.models import ChildProfile, Draft, Issue, StoryControls, StoryRequest
+from storyteller.pipeline import NO_NOTE, UNCHANGED, StoryPipeline, gate, soft_failures
+from storyteller.stages import drop_non_issues
 
 from .fakes import FakeLLM, brief, draft, failing, intent, verdict
 
@@ -137,7 +138,7 @@ def test_follow_up_asking_for_an_avoid_list_item_is_guarded_in_code():
         writer=[draft(600)],
         judge=[verdict(4), verdict(4)],
         followup=[intent()],  # the router misses the conflict
-        reviser=[draft(600, word="beetle")],
+        reviser=[draft(600, word="beetle", notes=["A friendly beetle joins instead of a spider."])],
     )
     pipeline = make(llm)
     session = pipeline.create(request(profile=profile))
@@ -253,7 +254,7 @@ def test_writer_gets_the_request_checks_adjustments_topic_and_language():
                 language="es",
             )
         ],
-        writer=[draft(600)],
+        writer=[draft(600, notes=["The monster eats cookies instead."])],
         judge=[verdict(4)],
     )
     session = make(llm).create(request())
@@ -349,7 +350,7 @@ def test_judge_is_told_the_real_life_topic_and_writer_gets_name_ideas():
     assert "<name_ideas>" in writer_message
 
 
-def test_name_ideas_are_varied_and_never_the_overused_favourites():
+def test_name_ideas_are_varied_and_never_the_overused_favorites():
     import random
 
     from storyteller.names import NAMES, name_ideas
@@ -373,3 +374,37 @@ def test_stray_closing_brackets_from_the_model_are_trimmed():
         brief(status="out_of_scope", redirect_message="Let's tell a story.}").redirect_message == "Let's tell a story."
     )
     assert Draft(text="Goodnight.}", title="Moon}", notes=["Note.]"]).text == "Goodnight."
+
+
+def test_issues_whose_fix_says_no_change_is_needed_are_dropped():
+    cleared = [
+        "No change needed; this line is not a moral.",
+        "Keep as is; the plan is revealed in the note, so no change needed.",
+        "Leave it as it is.",
+        "No changes are required here.",
+        "Keep it simple, but the sock pile line is fine; no change needed.",
+    ]
+    real = "Have the fox ask her mother before she sets off. Keep as is otherwise."
+    judged = verdict(4)
+    judged.issues = [Issue(kind="stated_moral", quote="a line", fix=fix) for fix in [*cleared, real]]
+    kept = drop_non_issues(judged).issues
+    assert [issue.fix for issue in kept] == [real]
+
+
+def test_a_draft_flagged_only_with_no_change_needed_passes_without_revising():
+    cleared = verdict(4)
+    cleared.issues = [Issue(kind="consistency", quote="a line", fix="Keep as is; it already makes sense.")]
+    llm = FakeLLM(analyzer=[brief()], writer=[draft()], judge=[cleared])
+    session = make(llm).create(request())
+    assert session.current.best.passed
+    assert llm.counts["reviser"] == 0
+
+
+def test_a_softened_story_without_a_note_is_sent_back_for_one():
+    softened = brief("adjusted", adjustments=["The monster eats socks, not children."])
+    noted = draft(notes=["The monster only eats socks, so nobody is ever in danger."])
+    llm = FakeLLM(analyzer=[softened], writer=[draft()], judge=[verdict(4), verdict(4)], reviser=[noted])
+    version = make(llm).create(request()).current
+    assert version.rounds[0].failures == [NO_NOTE]
+    assert NO_NOTE in llm.calls[-2][1]  # the reviser is told to add the note
+    assert version.best.passed and version.best.draft.notes

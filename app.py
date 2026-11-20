@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional, TypeVar, get_args
+from typing import TypeVar, get_args
 
 import streamlit as st
 
@@ -105,8 +106,10 @@ def pick_reason(version: StoryVersion) -> str:
 def describe_controls(controls: StoryControls) -> str:
     return " · ".join(
         [f"{controls.length.title()} length"]
-        + [f"{name.title()} {getattr(controls, name)} ({CONTROL_LABELS[name][getattr(controls, name)]})"
-           for name in ("energy", "silliness", "lesson")]
+        + [
+            f"{name.title()} {getattr(controls, name)} ({CONTROL_LABELS[name][getattr(controls, name)]})"
+            for name in ("energy", "silliness", "lesson")
+        ]
     )
 
 
@@ -125,11 +128,11 @@ def init_state() -> None:
         state.current = None  # id of the story on screen; None shows the request screen
 
 
-def current_session() -> Optional[StorySession]:
+def current_session() -> StorySession | None:
     return next((s for s in st.session_state.sessions if s.id == st.session_state.current), None)
 
 
-def open_story(session_id: Optional[str]) -> None:
+def open_story(session_id: str | None) -> None:
     st.session_state.current = session_id
 
 
@@ -174,7 +177,7 @@ def key_screen(status: KeyStatus) -> None:
 # --- Running the pipeline ----------------------------------------------------------------------
 
 
-def run_with_progress(label: str, task: Callable[[StoryPipeline], T]) -> Optional[T]:
+def run_with_progress(label: str, task: Callable[[StoryPipeline], T]) -> T | None:
     """Run a pipeline task with live progress. On failure, show a friendly message and return None."""
     with st.status(label, expanded=True) as status:
 
@@ -200,7 +203,11 @@ def controls_editor(current: StoryControls, key: str, with_story_type: bool = Tr
     """Widgets for the story controls, prefilled from `current`. Returns the chosen values."""
     minutes = {name: round(words / config.READ_ALOUD_WPM) for name, words in config.LENGTH_TARGETS.items()}
     length = st.segmented_control(
-        "Length", list(minutes), default=current.length, required=True, key=f"{key}_length",
+        "Length",
+        list(minutes),
+        default=current.length,
+        required=True,
+        key=f"{key}_length",
         format_func=lambda name: f"{name.title()} · ~{minutes[name]} min",
     )
     values = {}
@@ -211,13 +218,19 @@ def controls_editor(current: StoryControls, key: str, with_story_type: bool = Tr
     ):
         labels = CONTROL_LABELS[name]
         values[name] = st.select_slider(
-            name.title(), options=list(labels), value=getattr(current, name), key=f"{key}_{name}",
-            format_func=lambda v, labels=labels: f"{v} · {labels[v]}", help=help_text,
+            name.title(),
+            options=list(labels),
+            value=getattr(current, name),
+            key=f"{key}_{name}",
+            format_func=lambda v, labels=labels: f"{v} · {labels[v]}",
+            help=help_text,
         )
     update = {"length": length, **values}
     if with_story_type:
         update["story_type"] = st.selectbox(
-            "Story type", [None, *get_args(Category)], key=f"{key}_type",
+            "Story type",
+            [None, *get_args(Category)],
+            key=f"{key}_type",
             index=[None, *get_args(Category)].index(current.story_type),
             format_func=lambda c: "Let the storyteller choose" if c is None else c.title(),
         )
@@ -232,7 +245,11 @@ def sidebar() -> None:
     with st.sidebar:
         st.title("🌙 Bedtime Stories")
         st.button(
-            "New story", icon=":material/add:", width="stretch", on_click=open_story, args=(None,),
+            "New story",
+            icon=":material/add:",
+            width="stretch",
+            on_click=open_story,
+            args=(None,),
             type="primary" if st.session_state.current is None else "secondary",
         )
         if not sessions:
@@ -242,12 +259,14 @@ def sidebar() -> None:
             count = len(session.versions)
             label = session.current.best.draft.title + (f" ({count} versions)" if count > 1 else "")
             st.button(
-                label, key=f"open_{session.id}", width="stretch", on_click=open_story, args=(session.id,),
+                label,
+                key=f"open_{session.id}",
+                width="stretch",
+                on_click=open_story,
+                args=(session.id,),
                 type="primary" if session.id == st.session_state.current else "tertiary",
             )
-        st.caption(
-            f"Kept until you close this tab. Cost so far: ${sum(s.total_cost for s in sessions):.4f}"
-        )
+        st.caption(f"Kept until you close this tab. Cost so far: ${sum(s.total_cost for s in sessions):.4f}")
 
 
 def set_request(text: str) -> None:
@@ -264,7 +283,9 @@ def request_screen() -> None:
 
     with st.form("request_form"):
         text = st.text_area(
-            "Story idea", key="request_text", height=110,
+            "Story idea",
+            key="request_text",
+            height=110,
             placeholder="A name, an animal, a place, a worry to soothe... anything works, even just 'a story'.",
         )
         with st.expander("Story settings"):
@@ -293,7 +314,10 @@ def story_screen(session: StorySession) -> None:
     version = versions[-1]
     if len(versions) > 1:
         number = st.segmented_control(
-            "Version", [v.number for v in versions], default=version.number, required=True,
+            "Version",
+            [v.number for v in versions],
+            default=version.number,
+            required=True,
             key=f"version_{session.id}_{len(versions)}",  # a new version resets the choice to the latest
             format_func=lambda n: f"v{n}",
         )
@@ -326,9 +350,12 @@ def show_story(session: StorySession, version: StoryVersion) -> None:
         st.warning(f"I stopped revising early ({version.stopped_early}), so this is the best draft so far.")
     st.markdown(story_html(best.draft.text), unsafe_allow_html=True)
     st.download_button(
-        "Download", f"{best.draft.title}\n\n{best.draft.text}\n", icon=":material/download:",
+        "Download",
+        f"{best.draft.title}\n\n{best.draft.text}\n",
+        icon=":material/download:",
         file_name=re.sub(r"[^a-z0-9]+", "-", best.draft.title.lower()).strip("-") + ".txt",
-        key=f"download_{session.id}_{version.number}", on_click="ignore",
+        key=f"download_{session.id}_{version.number}",
+        on_click="ignore",
     )
 
 
@@ -405,7 +432,9 @@ def show_request_check(session: StorySession, version: StoryVersion) -> None:
     if brief.sensitive_topic:
         lines.append(f"**Real-life topic, handled with care:** {md(brief.sensitive_topic)}")
     if brief.language != "en":
-        lines.append(f"**Language:** {brief.language} (the reading-level check only works for English, so it's skipped)")
+        lines.append(
+            f"**Language:** {brief.language} (the reading-level check only works for English, so it's skipped)"
+        )
     lines.append(f"**Settings for this version:** {describe_controls(version.controls)}")
     st.markdown("\n\n".join(lines))
     if version.instruction:
@@ -431,28 +460,41 @@ def show_rounds(version: StoryVersion) -> None:
         "outside the range gets one revision but doesn't stop a story from passing."
     )
     for index, result in enumerate(version.rounds):
-        status = "sent back" if not result.passed else "passed" if result.clean else "passed, length or reading level off"
+        status = (
+            "sent back" if not result.passed else "passed" if result.clean else "passed, length or reading level off"
+        )
         shown = " · shown" if index == version.best_round else ""
         st.markdown(f"**Draft {result.round}: {status}{shown}**")
         checks = result.checks
         avoid = f"avoid-list: {', '.join(checks.avoid_hits)}" if checks.avoid_hits else "avoid-list clear"
-        st.markdown(" · ".join([
-            f"{mark(checks.length_ok)} {checks.word_count} words (allowed {checks.length_min}–{checks.length_max})",
-            f"{mark(not reading_level_note(checks))} reading grade {checks.reading_grade:g} "
-            f"(about {checks.grade_max:g} for this age)" if checks.language == "en" else "reading grade skipped (not English)",
-            f"{mark(not checks.avoid_hits)} {avoid}",
-        ]))
+        st.markdown(
+            " · ".join(
+                [
+                    f"{mark(checks.length_ok)} {checks.word_count} words (allowed {checks.length_min}–{checks.length_max})",
+                    f"{mark(not reading_level_note(checks))} reading grade {checks.reading_grade:g} "
+                    f"(about {checks.grade_max:g} for this age)"
+                    if checks.language == "en"
+                    else "reading grade skipped (not English)",
+                    f"{mark(not checks.avoid_hits)} {avoid}",
+                ]
+            )
+        )
         if result.verdict.issues:
-            st.markdown("Must fix:\n" + "\n".join(
-                f"- :red-badge[{issue.kind.replace('_', ' ')}] \"{md(issue.quote)}\"  \n  *Fix:* {md(issue.fix)}"
-                for issue in result.verdict.issues
-            ))
+            st.markdown(
+                "Must fix:\n"
+                + "\n".join(
+                    f'- :red-badge[{issue.kind.replace("_", " ")}] "{md(issue.quote)}"  \n  *Fix:* {md(issue.fix)}'
+                    for issue in result.verdict.issues
+                )
+            )
         else:
             st.markdown(":green[✓] No must-fix problems found.")
-        st.markdown("\n".join(
-            f"- {score_badge(score.score)} **{name.replace('_', ' ')}**: {md(score.note)}"
-            for name, score in result.verdict.scores().items()
-        ))
+        st.markdown(
+            "\n".join(
+                f"- {score_badge(score.score)} **{name.replace('_', ' ')}**: {md(score.note)}"
+                for name, score in result.verdict.scores().items()
+            )
+        )
         st.caption(f"Reviewer's summary: {md(result.verdict.summary)}")
 
 
@@ -466,14 +508,21 @@ def show_calls(session: StorySession) -> None:
     columns[3].metric("Cost", f"${session.total_cost:.4f}")
     rows = [
         {
-            "Step": e.step, "Try": e.attempt, "OK": e.ok, "Tokens in": e.input_tokens,
-            "Tokens out": e.output_tokens, "Seconds": e.latency_ms / 1000, "Cost": e.cost_usd,
+            "Step": e.step,
+            "Try": e.attempt,
+            "OK": e.ok,
+            "Tokens in": e.input_tokens,
+            "Tokens out": e.output_tokens,
+            "Seconds": e.latency_ms / 1000,
+            "Cost": e.cost_usd,
             "Note": e.error or "",
         }
         for e in trace
     ]
     st.dataframe(
-        rows, hide_index=True, width="stretch",
+        rows,
+        hide_index=True,
+        width="stretch",
         column_config={
             "Seconds": st.column_config.NumberColumn(format="%.1f"),
             "Cost": st.column_config.NumberColumn(format="$%.5f"),

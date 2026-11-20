@@ -3,6 +3,7 @@
     python -m eval.run_eval                  # all cases
     python -m eval.run_eval --cases a,b      # selected cases
     python -m eval.run_eval --label v5       # name the results folder
+    python -m eval.run_eval --set heldout    # the held-out requests (never used for tuning)
 
 For every case the pipeline runs once, and two of its stories are scored:
 - **first draft**: the writer's story before any judge feedback. This is the single-prompt
@@ -31,7 +32,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from statistics import mean
-from typing import Optional, get_args
+from typing import get_args
 
 from storyteller import config, stages
 from storyteller.checks import check_failures, run_checks
@@ -44,7 +45,7 @@ VARIANTS = ("first_draft", "final")
 LABELS = {"first_draft": "Writer only (no judge)", "final": "With judge loop"}
 
 
-def load_cases(path: Path, only: Optional[set[str]]) -> list[dict]:
+def load_cases(path: Path, only: set[str] | None) -> list[dict]:
     cases = json.loads(path.read_text())["cases"]
     return [c for c in cases if not only or c["id"] in only]
 
@@ -55,8 +56,14 @@ def to_request(case: dict) -> StoryRequest:
 
 
 def score(
-    llm: LLM, request: StoryRequest, draft: Draft, trace: list[TraceEvent], samples: int = 1,
-    adjustments: Optional[list[str]] = None, language: str = "en", sensitive_topic: Optional[str] = None,
+    llm: LLM,
+    request: StoryRequest,
+    draft: Draft,
+    trace: list[TraceEvent],
+    samples: int = 1,
+    adjustments: list[str] | None = None,
+    language: str = "en",
+    sensitive_topic: str | None = None,
 ) -> dict:
     """Code checks plus `samples` fresh, independent judge calls for one story.
 
@@ -65,7 +72,9 @@ def score(
     """
     checks = run_checks(draft, request.controls, request.age, request.avoid, language)
     verdicts = [
-        stages.judge(llm, request, draft, checks, adjustments=adjustments or [], trace=trace, sensitive_topic=sensitive_topic)
+        stages.judge(
+            llm, request, draft, checks, adjustments=adjustments or [], trace=trace, sensitive_topic=sensitive_topic
+        )
         for _ in range(samples)
     ]
     per_criterion = {c: mean(getattr(v, c).score for v in verdicts) for c in CRITERIA}
@@ -101,8 +110,13 @@ def _cost(trace: list[TraceEvent]) -> float:
 
 def run_case(llm: LLM, case: dict, max_rounds: int, judge_samples: int = 1) -> dict:
     request = to_request(case)
-    result: dict = {"id": case["id"], "tag": case["tag"], "request": case["request"],
-                    "expected_status": case.get("expected_status"), "variants": {}}
+    result: dict = {
+        "id": case["id"],
+        "tag": case["tag"],
+        "request": case["request"],
+        "expected_status": case.get("expected_status"),
+        "variants": {},
+    }
     judge_trace: list[TraceEvent] = []
     try:
         started = time.monotonic()
@@ -118,11 +132,27 @@ def run_case(llm: LLM, case: dict, max_rounds: int, judge_samples: int = 1) -> d
         result["rounds"] = len(version.rounds)
         result["in_loop_failures"] = [r.failures + r.soft_failures for r in version.rounds]
         writer = [e for e in session.trace if e.step == "writer"]
-        first = score(llm, request, version.rounds[0].draft, judge_trace, judge_samples, brief.adjustments, brief.language,
-                      brief.sensitive_topic)
+        first = score(
+            llm,
+            request,
+            version.rounds[0].draft,
+            judge_trace,
+            judge_samples,
+            brief.adjustments,
+            brief.language,
+            brief.sensitive_topic,
+        )
         first.update(latency_s=round(sum(e.latency_ms for e in writer) / 1000, 1), cost_usd=_cost(writer))
-        final = score(llm, request, version.best.draft, judge_trace, judge_samples, brief.adjustments, brief.language,
-                      brief.sensitive_topic)
+        final = score(
+            llm,
+            request,
+            version.best.draft,
+            judge_trace,
+            judge_samples,
+            brief.adjustments,
+            brief.language,
+            brief.sensitive_topic,
+        )
         final.update(latency_s=latency, cost_usd=_cost(session.trace))
         result["variants"]["first_draft"] = first
         result["variants"]["final"] = final
@@ -205,7 +235,9 @@ def render_report(results: list[dict], label: str, max_rounds: int, judge_sample
         "| Length in range | " + " | ".join(s[v]["length_ok"] for v in VARIANTS) + " |",
         "| Avoid-list hits | " + " | ".join(str(s[v]["avoid_hits"]) for v in VARIANTS) + " |",
         "| Mean latency | " + " | ".join(f"{s[v]['latency']} s" if s[v]["cost"] else "—" for v in VARIANTS) + " |",
-        "| Mean cost per story | " + " | ".join(f"${s[v]['cost']:.4f}" if s[v]["cost"] else "—" for v in VARIANTS) + " |",
+        "| Mean cost per story | "
+        + " | ".join(f"${s[v]['cost']:.4f}" if s[v]["cost"] else "—" for v in VARIANTS)
+        + " |",
         "",
         *(
             [
@@ -269,7 +301,9 @@ def render_stories(results: list[dict]) -> str:
     for r in results:
         out += [f"## {r['id']} ({r['tag']})", "", f"**Request:** {r['request']}", ""]
         if r.get("status"):
-            out.append(f"**Status:** {r['status']} (expected {r.get('expected_status')}) · language: {r.get('language')}")
+            out.append(
+                f"**Status:** {r['status']} (expected {r.get('expected_status')}) · language: {r.get('language')}"
+            )
         for adjustment in r.get("adjustments", []):
             out.append(f"- adjustment: {adjustment}")
         if r.get("redirect_message"):
@@ -281,19 +315,32 @@ def render_stories(results: list[dict]) -> str:
             if not x:
                 continue
             c = x["checks"]
-            out += ["", f"### {LABELS[v]}: *{x['title']}*",
-                    f"{x['issues']:g} issues · mean {x['mean']:.2f} · passed {x['passed']:.0%} of reviews · "
-                    f"{c['word_count']} words (target {c['length_target']}) · grade {c['reading_grade']}",
-                    "", *[f"- note: {n}" for n in x.get("notes", [])],
-                    *[f"- issue ({i['kind']}): \"{i['quote']}\" -> {i['fix']}" for i in x["verdict"]["issues"]],
-                    "", f"> Judge: {x['verdict']['summary']}", "", x["text"]]
+            out += [
+                "",
+                f"### {LABELS[v]}: *{x['title']}*",
+                f"{x['issues']:g} issues · mean {x['mean']:.2f} · passed {x['passed']:.0%} of reviews · "
+                f"{c['word_count']} words (target {c['length_target']}) · grade {c['reading_grade']}",
+                "",
+                *[f"- note: {n}" for n in x.get("notes", [])],
+                *[f'- issue ({i["kind"]}): "{i["quote"]}" -> {i["fix"]}' for i in x["verdict"]["issues"]],
+                "",
+                f"> Judge: {x['verdict']['summary']}",
+                "",
+                x["text"],
+            ]
         out += ["", "---", ""]
     return "\n".join(out)
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--cases", help="comma-separated case ids (default: all)")
+    parser.add_argument(
+        "--set",
+        choices=["dev", "heldout"],
+        default="dev",
+        help="dev = requests.json (used while tuning); heldout = heldout_requests.json (run once, never tuned on)",
+    )
     parser.add_argument("--label", default=datetime.now().strftime("%Y%m%d-%H%M"))
     parser.add_argument("--max-rounds", type=int, default=config.MAX_ROUNDS)
     parser.add_argument("--workers", type=int, default=4)
@@ -307,14 +354,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     only = set(args.cases.split(",")) if args.cases else None
-    cases = load_cases(EVAL_DIR / "requests.json", only)
+    request_file = "requests.json" if args.set == "dev" else "heldout_requests.json"
+    cases = load_cases(EVAL_DIR / request_file, only)
     llm = LLM(key)
     print(f"Running {len(cases)} cases with {args.workers} workers...")
     results: dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {
-            pool.submit(run_case, llm, case, args.max_rounds, args.judge_samples): case["id"] for case in cases
-        }
+        futures = {pool.submit(run_case, llm, case, args.max_rounds, args.judge_samples): case["id"] for case in cases}
         for future in as_completed(futures):
             r = future.result()
             results[r["id"]] = r
@@ -322,7 +368,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             first = r["variants"].get("first_draft")
             detail = r.get("error") or (
                 f"first draft {first['issues']:g} issues -> final {final['issues']:g} in {r['rounds']} review(s)"
-                if final and first else f"status {r.get('status')}"
+                if final and first
+                else f"status {r.get('status')}"
             )
             print(f"  ✓ {r['id']}: {detail}", flush=True)
 

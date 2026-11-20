@@ -95,7 +95,9 @@ def check_failures(checks: CheckResults) -> list[str]:
 
 def avoid_failures(checks: CheckResults) -> list[str]:
     """Avoid-list hits: a hard failure, always."""
-    return [f"Avoid-list item found: '{term}'. Remove every trace of it, including synonyms." for term in checks.avoid_hits]
+    return [
+        f"Avoid-list item found: '{term}'. Remove every trace of it, including synonyms." for term in checks.avoid_hits
+    ]
 
 
 def length_failures(checks: CheckResults) -> list[str]:

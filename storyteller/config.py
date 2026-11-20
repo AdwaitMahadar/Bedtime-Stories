@@ -34,9 +34,9 @@ MAX_TOKENS = {
 }
 
 # --- Quality gate -------------------------------------------------------------
-MAX_ROUNDS = 3          # judge rounds per version; a 3rd runs only when a must-fix problem is still left (eval v9)
-FAIL_MAX_SCORE = 2      # a rubric score at or below this fails the draft, like a must-fix issue
-LENGTH_TOLERANCE = 0.25 # word count must be within ±25 % of the target; the writer still aims for the target
+MAX_ROUNDS = 3  # judge rounds per version; a 3rd runs only when a must-fix problem is still left (eval v9)
+FAIL_MAX_SCORE = 2  # a rubric score at or below this fails the draft, like a must-fix issue
+LENGTH_TOLERANCE = 0.25  # word count must be within ±25 % of the target; the writer still aims for the target
 READING_GRADE_SLACK = 1.0  # simplify only when the reading grade is more than this above the age band
 
 # --- Per-story budget ------------------------------------------------------------

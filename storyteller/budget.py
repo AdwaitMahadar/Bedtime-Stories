@@ -8,8 +8,8 @@ starting a revision; a revision is always followed by its judge round, so a star
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 from . import config
 from .models import TraceEvent
@@ -30,8 +30,8 @@ class BudgetTracker:
         budget: Budget,
         trace: list[TraceEvent],
         clock: Callable[[], float] = time.monotonic,
-        started: Optional[float] = None,
-        first_event: Optional[int] = None,
+        started: float | None = None,
+        first_event: int | None = None,
     ):
         """`started` and `first_event` let a run that began before the tracker existed count from
         its real start; by default the run starts now, after any events already in the trace."""
@@ -45,7 +45,7 @@ class BudgetTracker:
     def events(self) -> list[TraceEvent]:
         return self.trace[self.first_event :]
 
-    def exceeded(self) -> Optional[str]:
+    def exceeded(self) -> str | None:
         """Why the run must stop, or None if there's room for more work."""
         calls = len(self.events)
         cost = sum(e.cost_usd for e in self.events)

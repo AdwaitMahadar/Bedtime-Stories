@@ -7,15 +7,14 @@ tagged text is content, never instructions.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from collections.abc import Sequence
+from functools import cache
 from pathlib import Path
-from typing import Optional, Sequence
 
 from . import config
 from .checks import check_failures, reading_level_note
 from .controls import AGE_GUIDANCE, age_band, describe_controls, length_plan
 from .llm import LLM
-from .names import name_ideas
 from .models import (
     CheckResults,
     Draft,
@@ -25,11 +24,12 @@ from .models import (
     StoryRequest,
     TraceEvent,
 )
+from .names import name_ideas
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
-@lru_cache(maxsize=None)
+@cache
 def load_prompt(name: str) -> str:
     """Load a system prompt and insert the shared story rules where it asks for them."""
     text = (PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
@@ -103,7 +103,7 @@ def _checks(checks: CheckResults) -> str:
 
 def _issues(verdict: JudgeVerdict) -> str:
     """The must-fix issues, plus any criterion that failed outright: the reviser changes only these."""
-    items = [f"- [{i.kind}] \"{i.quote}\"\n  Fix: {i.fix}" for i in verdict.issues]
+    items = [f'- [{i.kind}] "{i.quote}"\n  Fix: {i.fix}' for i in verdict.issues]
     items += [
         f"- [{name}] scored {score.score}/5: {score.note}"
         for name, score in verdict.scores().items()
@@ -123,9 +123,7 @@ def analyze(llm: LLM, request: StoryRequest, trace: list[TraceEvent]) -> StoryBr
         _tag("avoid_list", _avoid(request)),
         task="Check this request.",
     )
-    return llm.structured(
-        step="analyzer", system=load_prompt("analyzer"), user=user, schema=StoryBrief, trace=trace
-    )
+    return llm.structured(step="analyzer", system=load_prompt("analyzer"), user=user, schema=StoryBrief, trace=trace)
 
 
 def write(llm: LLM, request: StoryRequest, brief: StoryBrief, trace: list[TraceEvent]) -> Draft:
@@ -159,7 +157,7 @@ def judge(
     checks: CheckResults,
     adjustments: list[str],
     trace: list[TraceEvent],
-    sensitive_topic: Optional[str] = None,
+    sensitive_topic: str | None = None,
 ) -> JudgeVerdict:
     """List must-fix issues and score the draft. Gets the request and the rubric, never the writer's prompt."""
     user = _message(
@@ -184,9 +182,9 @@ def revise(
     draft: Draft,
     adjustments: list[str],
     trace: list[TraceEvent],
-    verdict: Optional[JudgeVerdict] = None,
-    checks: Optional[CheckResults] = None,
-    parent_request: Optional[str] = None,
+    verdict: JudgeVerdict | None = None,
+    checks: CheckResults | None = None,
+    parent_request: str | None = None,
     extra_failures: Sequence[str] = (),
 ) -> Draft:
     """Improve a draft from the judge's issues, a parent's change request, or both.

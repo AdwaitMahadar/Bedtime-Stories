@@ -6,7 +6,7 @@ A bedtime story generator for ages 5–10. A short request becomes a written, **
 
 ```mermaid
 flowchart TD
-    U(["Parent"]) -->|"request + controls + child profile"| UI["Streamlit UI / CLI"]
+    U(["Parent"]) -->|"request + controls (+ child profile in the CLI)"| UI["Streamlit UI / CLI"]
     UI --> A["Request check<br/>tell as asked · soften · redirect"]
     A -->|"out of scope"| X["Friendly redirect"]
     X --> UI
@@ -57,6 +57,8 @@ Two complementary checks:
 - **`eval/run_eval.py`** runs 14 test requests, covering vague, unsafe, off-topic and injection attempts and supportive topics. For each request it scores the **writer's first draft** (the single prompt on its own, which doubles as the baseline) and the **final** story after the review loop. Every story is re-checked by **two fresh judge calls**. The headline number is **must-fix problems per story**, with pass rate, scores, the judge's own consistency, latency and cost.
 - **Reading the stories.** `eval/qa_run.py` runs 18 realistic requests and 10 follow-ups through the app's pipeline and writes every session out for reading, with each later draft as a word diff (the output is not committed). Every story and every intermediate draft was read in full. This found what the averages hid (the pigeon, a renamed family dog, a follow-up that changed nothing, judge fixes that created contradictions, over-cautious safety fixes) and led to the current design.
 
+- **Checking the checker.** `eval/judge_check.py` runs the judge on hand-written stories with one planted problem each, plus clean ones: it caught the planted problem in 20 of 20 calls with no false alarms. `run_eval.py --set heldout` runs 9 requests written after tuning finished, once.
+
 Each prompt change and its results are recorded in [PROMPT_CHANGELOG.md](PROMPT_CHANGELOG.md).
 
 Every model call is traced (time, step, attempt, tokens, latency, cost, stop reason, error) and saved as a JSON Lines log in `~/.bedtime-stories/logs/`. Logs hold call metadata only, never prompts, story text or child details. `python main.py --trace` prints the call timeline after each story, and the same data powers the app's "How this story was made" panel.
@@ -68,6 +70,8 @@ Every model call is traced (time, step, attempt, tokens, latency, cost, stop rea
 - **The story view:** the story, a note when something was changed, and a "Passed review" or "Best effort" badge.
 - **Follow-ups:** quick actions (Shorter, Funnier…), typed changes or new settings. Each one is reviewed again and adds a version, and earlier versions stay readable.
 - **"How this story was made":** the request check, every review with its must-fix problems and scores, and every model call with its cost.
+
+Every story is set up on its own: the parent picks the controls for tonight's story, and nothing is stored between sessions, so the app keeps no data about the child. A child profile (name, age, pronouns, favorite things, things to avoid, whether the child is the hero) is supported by the pipeline and set per run through the CLI (`--name Mia --age 5 --avoid spiders`).
 
 The UI only displays results: the pipeline package is shared with the CLI, and the UI is tested headless with the same fake LLM as the pipeline.
 

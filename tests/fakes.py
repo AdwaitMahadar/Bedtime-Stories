@@ -41,10 +41,15 @@ def verdict(*scores: int, issues=()) -> JudgeVerdict:
     """Seven scores in rubric order (one value means all seven get it), plus must-fix issues by kind."""
     values = list(scores or (4,)) * 7 if len(scores) <= 1 else list(scores)
     names = [
-        "age_fit", "emotional_safety", "story_arc", "request_match",
-        "control_match", "engagement", "bedtime_ending",
+        "age_fit",
+        "emotional_safety",
+        "story_arc",
+        "request_match",
+        "control_match",
+        "engagement",
+        "bedtime_ending",
     ]
-    fields = {name: CriterionScore(score=v, note="reason") for name, v in zip(names, values)}
+    fields = {name: CriterionScore(score=v, note="reason") for name, v in zip(names, values, strict=True)}
     found = [Issue(kind=kind, quote="quoted line", fix="do X") for kind in issues]
     return JudgeVerdict(issues=found, **fields, summary="Strength and fix.")
 

@@ -8,17 +8,16 @@ outside the repo (`config.LOG_DIR`).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from . import config
 from .models import StorySession, TraceEvent
 
 
-def log_path(session: StorySession, log_dir: Optional[Path] = None) -> Path:
+def log_path(session: StorySession, log_dir: Path | None = None) -> Path:
     return (log_dir or config.LOG_DIR) / f"{session.created_at:%Y%m%d-%H%M%S}-{session.id}.jsonl"
 
 
-def save(session: StorySession, log_dir: Optional[Path] = None) -> Optional[Path]:
+def save(session: StorySession, log_dir: Path | None = None) -> Path | None:
     """Write the session's full trace (rewritten after each run, so it's always complete).
 
     Returns the file path, or None if it couldn't be written: logging never breaks a story.

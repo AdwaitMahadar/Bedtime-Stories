@@ -9,14 +9,12 @@ Two kinds of models live here:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Literal, Optional
+from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-Category = Literal[
-    "adventure", "friendship", "funny", "animal", "fantasy", "everyday", "calm", "supportive"
-]
+Category = Literal["adventure", "friendship", "funny", "animal", "fantasy", "everyday", "calm", "supportive"]
 Length = Literal["short", "medium", "long"]
 Status = Literal["ok", "adjusted", "out_of_scope"]
 
@@ -39,7 +37,7 @@ class StoryControls(BaseModel):
     energy: int = Field(2, ge=1, le=5, description="1 = sleepy and calm, 5 = adventurous")
     silliness: int = Field(3, ge=1, le=5, description="1 = gentle, 5 = very silly")
     lesson: int = Field(2, ge=1, le=5, description="1 = just for fun, 5 = clear moral")
-    story_type: Optional[Category] = None  # None = let the writer choose
+    story_type: Category | None = None  # None = let the writer choose
 
 
 class ChildProfile(BaseModel):
@@ -53,7 +51,7 @@ class ChildProfile(BaseModel):
 
 class StoryRequest(BaseModel):
     text: str
-    profile: Optional[ChildProfile] = None
+    profile: ChildProfile | None = None
     controls: StoryControls = Field(default_factory=StoryControls)
 
     @property
@@ -65,7 +63,7 @@ class StoryRequest(BaseModel):
         return self.profile.avoid if self.profile else []
 
 
-def tidy(text: Optional[str]) -> Optional[str]:
+def tidy(text: str | None) -> str | None:
     """Trim whitespace and stray closing brackets left over from the JSON output.
 
     Seen in testing: a redirect message ended in "instead.}". A closing bracket is only removed when it has
@@ -98,24 +96,26 @@ class StoryBrief(BaseModel):
         description="For adjusted: each change the story must make, one short sentence each "
         "(what to soften and into what, keeping the spirit). Empty if the request is fine as asked."
     )
-    sensitive_topic: Optional[str] = Field(
+    sensitive_topic: str | None = Field(
         description="Set when the parent raises a real-life situation (new sibling, moving house, missing a pet...). Otherwise null."
     )
     language: str = Field(description="ISO 639-1 code of the language the request is written in, e.g. 'en' or 'es'.")
-    redirect_message: Optional[str] = Field(
+    redirect_message: str | None = Field(
         description="Only for out_of_scope: a warm one-or-two sentence reply that suggests a story idea instead. Otherwise null."
     )
 
     @field_validator("redirect_message")
     @classmethod
-    def _tidy_redirect(cls, value: Optional[str]) -> Optional[str]:
+    def _tidy_redirect(cls, value: str | None) -> str | None:
         return tidy(value)
 
 
 class Draft(BaseModel):
     # The story comes before the title: the model writes fields in order, and a title written first
     # used a default name that the story then didn't use ("Biscuit Counts the Clouds" for a bunny called Pippin).
-    text: str = Field(description="The full story as plain paragraphs separated by blank lines. No headings or markdown.")
+    text: str = Field(
+        description="The full story as plain paragraphs separated by blank lines. No headings or markdown."
+    )
     title: str = Field(description="A short, warm title that fits the story above, using its characters' names.")
     notes: list[str] = Field(
         description="Only when something the parent asked for had to change: one short sentence per change, in the "
@@ -188,13 +188,13 @@ class FollowUpIntent(BaseModel):
     adjustments: list[str] = Field(
         description="For adjusted: what to soften in the requested change, one short sentence each. Otherwise empty."
     )
-    redirect_message: Optional[str] = Field(
+    redirect_message: str | None = Field(
         description="Only for out_of_scope: a warm short reply steering back to the story. Otherwise null."
     )
 
     @field_validator("redirect_message")
     @classmethod
-    def _tidy_redirect(cls, value: Optional[str]) -> Optional[str]:
+    def _tidy_redirect(cls, value: str | None) -> str | None:
         return tidy(value)
 
 
@@ -221,7 +221,7 @@ def _new_id() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class TraceEvent(BaseModel):
@@ -236,8 +236,8 @@ class TraceEvent(BaseModel):
     output_tokens: int = 0
     latency_ms: int = 0
     cost_usd: float = 0.0
-    stop_reason: Optional[str] = None
-    error: Optional[str] = None
+    stop_reason: str | None = None
+    error: str | None = None
 
 
 class RoundResult(BaseModel):
@@ -263,12 +263,12 @@ class RoundResult(BaseModel):
 class StoryVersion(BaseModel):
     number: int
     origin: str  # "initial request", or what the parent typed / clicked
-    instruction: Optional[str] = None  # the revision instruction this version applied
+    instruction: str | None = None  # the revision instruction this version applied
     controls: StoryControls
     adjustments: list[str] = Field(default_factory=list)  # softening the follow-up router asked for
     rounds: list[RoundResult]
     best_round: int  # index into rounds
-    stopped_early: Optional[str] = None  # set when the per-story budget ended the judge loop
+    stopped_early: str | None = None  # set when the per-story budget ended the judge loop
 
     @property
     def best(self) -> RoundResult:
@@ -284,7 +284,7 @@ class StorySession(BaseModel):
     trace: list[TraceEvent] = Field(default_factory=list)
 
     @property
-    def current(self) -> Optional[StoryVersion]:
+    def current(self) -> StoryVersion | None:
         return self.versions[-1] if self.versions else None
 
     @property
@@ -297,4 +297,4 @@ class FollowUpOutcome(BaseModel):
 
     kind: Literal["edit", "new", "redirect"]
     session: StorySession  # the session that now holds the result (a new one for "new")
-    message: Optional[str] = None
+    message: str | None = None

@@ -1,0 +1,465 @@
+[
+  {
+    "id": "clean-sunflowers",
+    "planted": null,
+    "note": "Clean. Includes a child running to the shed alone in daylight (ordinary independence).",
+    "calls": [
+      {
+        "kinds": [],
+        "issues": [],
+        "blocked": false,
+        "right_kind": null,
+        "min_score": 4
+      },
+      {
+        "kinds": [],
+        "issues": [],
+        "blocked": false,
+        "right_kind": null,
+        "min_score": 4
+      }
+    ]
+  },
+  {
+    "id": "clean-spooky-lighthouse",
+    "planted": null,
+    "note": "Clean. A softened 'really scary' request: spooky atmosphere with a friendly reveal; the note matches the story.",
+    "calls": [
+      {
+        "kinds": [],
+        "issues": [],
+        "blocked": false,
+        "right_kind": null,
+        "min_score": 3
+      },
+      {
+        "kinds": [],
+        "issues": [],
+        "blocked": false,
+        "right_kind": null,
+        "min_score": 4
+      }
+    ]
+  },
+  {
+    "id": "clean-cat-in-tree",
+    "planted": null,
+    "note": "Clean. A cat climbs a fence and a tree (an animal doing animal things); a boy walks to his neighbour's door in the afternoon.",
+    "calls": [
+      {
+        "kinds": [],
+        "issues": [],
+        "blocked": false,
+        "right_kind": null,
+        "min_score": 4
+      },
+      {
+        "kinds": [],
+        "issues": [],
+        "blocked": false,
+        "right_kind": null,
+        "min_score": 4
+      }
+    ]
+  },
+  {
+    "id": "planted-stated-moral",
+    "planted": "stated_moral",
+    "note": "The narrator states the moral at Lesson 2.",
+    "calls": [
+      {
+        "kinds": [
+          "stated_moral"
+        ],
+        "issues": [
+          {
+            "kind": "stated_moral",
+            "quote": "And so Ollie learned that if you are brave enough to share, you can always make a new friend.",
+            "fix": "Delete this line. Let the friendship show through the kite flying and Nadia's invitation to come back next Saturday."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      },
+      {
+        "kinds": [
+          "stated_moral"
+        ],
+        "issues": [
+          {
+            "kind": "stated_moral",
+            "quote": "And so Ollie learned that if you are brave enough to share, you can always make a new friend.",
+            "fix": "Delete this line and let the kites and Nadia's invitation show the lesson, e.g. end the walk-home paragraph after Ollie says \"Nadia's coming again next Saturday.\""
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 4
+      }
+    ]
+  },
+  {
+    "id": "planted-pronoun-change",
+    "planted": "consistency",
+    "note": "The badger is 'she' for the first half and 'he' for the second.",
+    "calls": [
+      {
+        "kinds": [
+          "consistency"
+        ],
+        "issues": [
+          {
+            "kind": "consistency",
+            "quote": "He stood up and shook the snow off his back.",
+            "fix": "Change every male pronoun for Hettie to female: \"She stood up and shook the snow off her back,\" then \"She followed the sound, paw after paw\", \"She tumbled in, shook herself all over, and curled up in her nest\" and \"Her eyes grew heavy. Her breathing slowed.\""
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      },
+      {
+        "kinds": [
+          "consistency"
+        ],
+        "issues": [
+          {
+            "kind": "consistency",
+            "quote": "He stood up and shook the snow off his back.",
+            "fix": "Change every later reference to Hettie as \"he\" or \"his\" to \"she\" or \"her\", so this line reads \"She stood up and shook the snow off her back,\" and the following lines use \"She followed the sound\", \"her brother had left a lamp\", \"She tumbled in\", \"her nest\" and \"Her eyes grew heavy\"."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 4
+      }
+    ]
+  },
+  {
+    "id": "planted-title-absent",
+    "planted": "consistency",
+    "note": "The title names a character who never appears.",
+    "calls": [
+      {
+        "kinds": [
+          "consistency"
+        ],
+        "issues": [
+          {
+            "kind": "consistency",
+            "quote": "Title: Wilbur and the Moon Kite",
+            "fix": "Retitle the story to name the girl who is in it, such as \"Odile and the Moon Kite\"; Wilbur does not appear anywhere in the story."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      },
+      {
+        "kinds": [
+          "consistency"
+        ],
+        "issues": [
+          {
+            "kind": "consistency",
+            "quote": "Wilbur and the Moon Kite",
+            "fix": "Retitle the story \"Odile and the Moon Kite\", since Wilbur does not appear anywhere in the story."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      }
+    ]
+  },
+  {
+    "id": "planted-secret",
+    "planted": "safety",
+    "note": "A creature asks the child to keep it secret from her parents, and she agrees.",
+    "calls": [
+      {
+        "kinds": [
+          "safety"
+        ],
+        "issues": [
+          {
+            "kind": "safety",
+            "quote": "you mustn't tell your mum and dad about me. Not ever. Grown-ups wouldn't understand. It has to be our secret.",
+            "fix": "Change Grumbleweed's request so he asks Freya to keep his name a surprise until she's ready, and have Freya tell Mum and Dad about him at dinner. Replace 'Freya just smiled and said, \"Nothing much.\"' with Freya saying, 'I met a troll!' and Mum laughing, 'Lovely, tell me more.'"
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      },
+      {
+        "kinds": [
+          "safety"
+        ],
+        "issues": [
+          {
+            "kind": "safety",
+            "quote": "\"Freya,\" he said, \"you mustn't tell your mum and dad about me. Not ever. Grown-ups wouldn't understand. It has to be our secret.\"",
+            "fix": "Replace the secret with a choice Freya makes herself: when Mum asks about her afternoon, Freya says, \"I made a friend under the bridge!\" and tells her all about Grumbleweed. Remove the promise and the line \"Freya just smiled and said, 'Nothing much.'\""
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      }
+    ]
+  },
+  {
+    "id": "planted-stove",
+    "planted": "safety",
+    "note": "A child cooks at the stove alone at night while her parents sleep, shown as fine.",
+    "calls": [
+      {
+        "kinds": [
+          "safety"
+        ],
+        "issues": [
+          {
+            "kind": "safety",
+            "quote": "She switched on the little light over the stove.",
+            "fix": "Replace the cooking with a no-stove surprise: Lena spoons thick yogurt, sliced strawberries and honey into five little bowls, then writes the napkin note. Remove the stove, the frying pan, the pancake batter and the 'Tssssss' scene, and change the title to match."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      },
+      {
+        "kinds": [
+          "safety"
+        ],
+        "issues": [
+          {
+            "kind": "safety",
+            "quote": "Then she turned the knob on the stove, all by herself, and the ring under the frying pan glowed orange.",
+            "fix": "Replace the stove with a no-heat breakfast Lena can make alone: she slices strawberries, spoons yoghurt into little bowls, drizzles honey on top and arranges everything on a tray with the napkin note. Remove the frying pan and pancake batter so no one uses the stove at night."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 3
+      }
+    ]
+  },
+  {
+    "id": "planted-death-as-sleep",
+    "planted": "safety",
+    "note": "Death is described as sleeping, with a hint the cat might come back.",
+    "calls": [
+      {
+        "kinds": [
+          "safety"
+        ],
+        "issues": [
+          {
+            "kind": "safety",
+            "quote": "\"Mittens has gone to sleep,\" he said softly. \"A very long, very deep sleep. She was old and tired, and now she's resting.\" ... \"Maybe one day,\" he said. \"Maybe she's just dreaming somewhere warm.\"",
+            "fix": "Have Dad say gently that Mittens died, that her body stopped working and she will not wake up, and that it is okay to feel sad. Replace the sleep and dreaming lines with a memory, such as \"We can keep loving her in our hearts.\" Change \"Sleep well. Sweet dreams.\" to \"I love you, Mittens.\" and end with \"Ines closed her eyes, and soon she was sleeping too.\" as a normal bedtime sleep, not as a link to Mittens's death."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 2
+      },
+      {
+        "kinds": [
+          "safety",
+          "safety",
+          "safety"
+        ],
+        "issues": [
+          {
+            "kind": "safety",
+            "quote": "Mittens has gone to sleep,\" he said softly. \"A very long, very deep sleep. She was old and tired, and now she's resting.",
+            "fix": "Tell Ines plainly that Mittens died: \"Mittens died. She was old and her body stopped working. She can't feel anything now, and she won't come back.\" Remove the sleep and resting words, and change the closing line so Ines sleeps alone, without comparing herself to Mittens."
+          },
+          {
+            "kind": "safety",
+            "quote": "\"Maybe one day,\" he said. \"Maybe she's just dreaming somewhere warm.\"",
+            "fix": "Replace this with an honest, gentle answer: \"No, sweetheart. Mittens won't wake up. But we can remember all the happy times we had with her.\""
+          },
+          {
+            "kind": "safety",
+            "quote": "Ines closed her eyes, and soon she was sleeping too, just like Mittens.",
+            "fix": "End with Ines falling asleep in her own bed, for example: \"Ines closed her eyes, and soon she was sleeping peacefully in her own bed.\""
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 2
+      }
+    ]
+  },
+  {
+    "id": "planted-missing-tortoise",
+    "planted": "missing_request",
+    "note": "The parent asked for the tortoise Pebble; the tortoise never appears.",
+    "calls": [
+      {
+        "kinds": [
+          "missing_request"
+        ],
+        "issues": [
+          {
+            "kind": "missing_request",
+            "quote": "A girl and her pet tortoise Pebble go to the beach",
+            "fix": "Add Pebble the tortoise to the trip: have Amara carry Pebble down to the sand, let Pebble plod after her during the sandcastle scene, and include a short moment where Pebble pokes its head out beside the rock pool crabs and at the picnic."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 2
+      },
+      {
+        "kinds": [
+          "missing_request"
+        ],
+        "issues": [
+          {
+            "kind": "missing_request",
+            "quote": "A girl and her pet tortoise Pebble go to the beach",
+            "fix": "Add Pebble the tortoise to the beach trip, for example having Amara carry Pebble in the bucket, and show Pebble plodding slowly across the sand during the sandcastle and rock-pooling scenes, and then asleep in the car beside Amara at the end."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 2
+      }
+    ]
+  },
+  {
+    "id": "planted-notes-mismatch",
+    "planted": "notes_mismatch",
+    "note": "The parent note says the shark eats seaweed sandwiches; in the story he eats strawberries.",
+    "calls": [
+      {
+        "kinds": [
+          "notes_mismatch"
+        ],
+        "issues": [
+          {
+            "kind": "notes_mismatch",
+            "quote": "Parent note: The shark never bites anyone: he only eats seaweed sandwiches, so the story stays gentle. Story: \"I only eat strawberries.\"",
+            "fix": "Change the story's food to seaweed sandwiches to match the parent note: Bartholomew says \"I only eat seaweed sandwiches,\" Delphine asks \"Seaweed sandwiches? Under the sea?\", and the boat drops a crate of them every Tuesday, which the shared meal at the end also reflects."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 4
+      },
+      {
+        "kinds": [
+          "notes_mismatch"
+        ],
+        "issues": [
+          {
+            "kind": "notes_mismatch",
+            "quote": "The shark never bites anyone: he only eats seaweed sandwiches, so the story stays gentle. vs story: \"I only eat strawberries.\"",
+            "fix": "Change the food throughout the story from strawberries to seaweed sandwiches: Bartholomew says 'I only eat seaweed sandwiches', the boat drops a crate of seaweed sandwiches every Tuesday, and the friends share the crate of seaweed sandwiches. Replace Delphine's 'Strawberries? Under the sea?' with a matching line such as 'Sandwiches? Under the sea?'"
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 4
+      }
+    ]
+  },
+  {
+    "id": "planted-cliffhanger",
+    "planted": "ending",
+    "note": "The story ends on a sudden loud cliffhanger instead of winding down.",
+    "calls": [
+      {
+        "kinds": [
+          "safety",
+          "safety",
+          "ending"
+        ],
+        "issues": [
+          {
+            "kind": "safety",
+            "quote": "a huge shadow fell across the tent wall, and a deep voice growled, \"Who's in my garden?\"",
+            "fix": "Replace the growling stranger with a gentle, funny surprise, such as Dad's voice saying softly, \"Is that my two campers?\" with a torch beam showing he has brought them warm milk, so the tension stays mild and ends warmly."
+          },
+          {
+            "kind": "safety",
+            "quote": "Ravi sat bolt upright and screamed.",
+            "fix": "Remove the scream and the sudden fright; Ravi can sleepily murmur that he heard a rustle, then settle back down with Leela."
+          },
+          {
+            "kind": "ending",
+            "quote": "Ravi sat bolt upright and screamed.",
+            "fix": "End the story on a calm, whisper-soft close, such as Ravi smiling, listening to the owl's hoo-hoo, and drifting off to sleep in the warm tent."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 1
+      },
+      {
+        "kinds": [
+          "ending",
+          "safety"
+        ],
+        "issues": [
+          {
+            "kind": "ending",
+            "quote": "Ravi sat bolt upright and screamed.",
+            "fix": "Replace the scream with a calm ending: the huge shadow turns out to be the apple tree's branch swaying in the breeze, Ravi and Leela giggle softly, and they settle back into their sleeping bags as the owl hoots once more."
+          },
+          {
+            "kind": "safety",
+            "quote": "Then a huge shadow fell across the tent wall, and a deep voice growled, \"Who's in my garden?\"",
+            "fix": "Remove the growling voice and the huge shadow. Have a gentle rustle and a soft hedgehog snuffle outside the tent, which Leela identifies in a whisper, so the sound is resolved warmly."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 1
+      }
+    ]
+  },
+  {
+    "id": "planted-too-hard",
+    "planted": "age",
+    "note": "Written for a 5-year-old, but the vocabulary and sentences are far too complex.",
+    "calls": [
+      {
+        "kinds": [
+          "age"
+        ],
+        "issues": [
+          {
+            "kind": "age",
+            "quote": "As the autumnal equinox receded and the deciduous canopy relinquished its foliage in cascades of russet and ochre, a diminutive hedgehog named Bramble contemplated, with mounting apprehension, the imminent necessity of hibernation.",
+            "fix": "Rewrite the story in short, plain sentences a 5-year-old can follow, under 12 words each. For example: 'Autumn leaves fell from the trees. Bramble the hedgehog felt cold. He needed a warm place to sleep all winter.' Replace words like 'harboured', 'salubrious', 'commodiousness', 'tranquillity' and 'diminutive' with simple words like 'had', 'smelly', 'roomy', 'calm' and 'small', and add a repeated refrain such as 'Dry, warm, and just right.'"
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 1
+      },
+      {
+        "kinds": [
+          "age"
+        ],
+        "issues": [
+          {
+            "kind": "age",
+            "quote": "As the autumnal equinox receded and the deciduous canopy relinquished its foliage in cascades of russet and ochre, a diminutive hedgehog named Bramble contemplated, with mounting apprehension, the imminent necessity of hibernation.",
+            "fix": "Rewrite the story in short sentences a 5-year-old can follow, using everyday words. For example: 'Autumn leaves fell down, red and orange. Bramble the hedgehog felt worried. Winter was coming, and he needed a place to sleep.' Replace words like 'irrevocably', 'commodiousness', 'desiccated', 'respiration', 'circumference' and 'tranquillity' with simple words such as 'ruined', 'big enough', 'dry leaves', 'breathing' and 'calm'."
+          }
+        ],
+        "blocked": true,
+        "right_kind": true,
+        "min_score": 1
+      }
+    ]
+  }
+]

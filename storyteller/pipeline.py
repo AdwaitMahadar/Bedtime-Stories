@@ -10,7 +10,7 @@ is capped by a per-story `Budget` of calls, cost and time.
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from . import config, stages
 from .budget import Budget, BudgetTracker
@@ -75,8 +75,12 @@ def pick_best(rounds: list[RoundResult]) -> int:
     def rank(index: int):
         r = rounds[index]
         return (
-            r.passed, not r.checks.avoid_hits, -len(r.failures), -len(r.soft_failures),
-            r.verdict.mean_score, index,
+            r.passed,
+            not r.checks.avoid_hits,
+            -len(r.failures),
+            -len(r.soft_failures),
+            r.verdict.mean_score,
+            index,
         )
 
     return max(range(len(rounds)), key=rank)
@@ -90,14 +94,14 @@ class StoryPipeline:
         self,
         llm: LLM,
         max_rounds: int = config.MAX_ROUNDS,
-        on_progress: Optional[ProgressFn] = None,
-        budget: Budget = Budget(),
+        on_progress: ProgressFn | None = None,
+        budget: Budget | None = None,
     ):
         if max_rounds < 1:
             raise ValueError("max_rounds must be at least 1 (one judge round, no revisions)")
         self.llm = llm
         self.max_rounds = max_rounds
-        self.budget = budget
+        self.budget = budget or Budget()
         self.on_progress = on_progress
 
     def _progress(self, step: str, detail: str) -> None:
@@ -127,8 +131,12 @@ class StoryPipeline:
         rounds, best, stopped = self.judge_loop(request, brief, draft, brief.adjustments, trace, tracker)
         session.versions.append(
             StoryVersion(
-                number=1, origin="initial request", controls=request.controls,
-                rounds=rounds, best_round=best, stopped_early=stopped,
+                number=1,
+                origin="initial request",
+                controls=request.controls,
+                rounds=rounds,
+                best_round=best,
+                stopped_early=stopped,
             )
         )
         self._progress("done", _finish_summary(rounds, best, stopped))
@@ -143,10 +151,10 @@ class StoryPipeline:
         draft: Draft,
         adjustments: list[str],
         trace: list[TraceEvent],
-        tracker: Optional[BudgetTracker] = None,
-        parent_request: Optional[str] = None,
-        previous_text: Optional[str] = None,
-    ) -> tuple[list[RoundResult], int, Optional[str]]:
+        tracker: BudgetTracker | None = None,
+        parent_request: str | None = None,
+        previous_text: str | None = None,
+    ) -> tuple[list[RoundResult], int, str | None]:
         """Judge, revise and repeat until a draft has nothing left to fix, rounds run out or the
         budget is spent. For a follow-up, `previous_text` catches a revision that changed nothing
         ("make it scarier" once came back word for word the same), and `parent_request` reaches
@@ -156,7 +164,7 @@ class StoryPipeline:
         """
         tracker = tracker or BudgetTracker(self.budget, trace)
         rounds: list[RoundResult] = []
-        stopped: Optional[str] = None
+        stopped: str | None = None
         for number in range(1, self.max_rounds + 1):
             checks = run_checks(draft, request.controls, request.age, request.avoid, brief.language)
             self._progress("judge", f"Review {number}: checking {checks.word_count} words")
@@ -186,8 +194,15 @@ class StoryPipeline:
                 break
             self._progress("reviser", "Fixing what the review found")
             draft = stages.revise(
-                self.llm, request, draft, adjustments, trace, verdict=verdict, checks=checks,
-                parent_request=parent_request, extra_failures=[UNCHANGED] if unchanged else [],
+                self.llm,
+                request,
+                draft,
+                adjustments,
+                trace,
+                verdict=verdict,
+                checks=checks,
+                parent_request=parent_request,
+                extra_failures=[UNCHANGED] if unchanged else [],
             )
             draft = _notes_only_for_changes(draft, adjustments)
         return rounds, pick_best(rounds), stopped
@@ -197,9 +212,9 @@ class StoryPipeline:
     def follow_up(
         self,
         session: StorySession,
-        message: Optional[str] = None,
-        controls: Optional[StoryControls] = None,
-        quick_action: Optional[str] = None,
+        message: str | None = None,
+        controls: StoryControls | None = None,
+        quick_action: str | None = None,
     ) -> FollowUpOutcome:
         """Apply a parent's change: typed message, quick action, new control values, or a mix.
 
@@ -230,9 +245,7 @@ class StoryPipeline:
                 new_request = StoryRequest(text=words, profile=session.request.profile, controls=new_controls)
                 new_session = self.create(new_request)
                 if new_session.brief.status == "out_of_scope":
-                    return FollowUpOutcome(
-                        kind="redirect", session=session, message=new_session.brief.redirect_message
-                    )
+                    return FollowUpOutcome(kind="redirect", session=session, message=new_session.brief.redirect_message)
                 return FollowUpOutcome(kind="new", session=new_session)
             # The avoid-list is enforced in code, whatever the router decided.
             adjustments += [
@@ -256,8 +269,14 @@ class StoryPipeline:
         )
         draft = _notes_only_for_changes(draft, all_adjustments)
         rounds, best, stopped = self.judge_loop(
-            request, session.brief, draft, all_adjustments, session.trace, tracker,
-            parent_request=parent_request, previous_text=current.best.draft.text,
+            request,
+            session.brief,
+            draft,
+            all_adjustments,
+            session.trace,
+            tracker,
+            parent_request=parent_request,
+            previous_text=current.best.draft.text,
         )
         session.versions.append(
             StoryVersion(
@@ -294,7 +313,7 @@ def _edited_request(session: StorySession, instruction: str, controls: StoryCont
     return session.request.model_copy(update={"text": text, "controls": controls})
 
 
-def _finish_summary(rounds: list[RoundResult], best: int, stopped: Optional[str] = None) -> str:
+def _finish_summary(rounds: list[RoundResult], best: int, stopped: str | None = None) -> str:
     chosen = rounds[best]
     status = "passed review" if chosen.passed else f"best effort ({len(chosen.failures)} problem(s) left)"
     if chosen.passed and chosen.soft_failures:

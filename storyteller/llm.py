@@ -11,8 +11,8 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import Literal, Optional, TypeVar
+from functools import cache
+from typing import Literal, TypeVar
 
 import anthropic
 from anthropic import transform_schema
@@ -73,7 +73,7 @@ def describe_api_error(error: Exception) -> tuple[KeyProblemKind, str]:
 # --- API key ---------------------------------------------------------------------------------
 
 
-def load_api_key() -> Optional[str]:
+def load_api_key() -> str | None:
     """Read ANTHROPIC_API_KEY from the environment, falling back to the repo's `.env`.
 
     `.env` is re-read on every call and never copied into the environment, so the UI's Retry
@@ -86,11 +86,11 @@ def load_api_key() -> Optional[str]:
 @dataclass
 class KeyStatus:
     ok: bool
-    kind: Optional[KeyProblemKind] = None
+    kind: KeyProblemKind | None = None
     message: str = ""
 
 
-def check_api_key(api_key: Optional[str]) -> KeyStatus:
+def check_api_key(api_key: str | None) -> KeyStatus:
     """Verify the key with a free models lookup, so problems surface at startup, not mid-story."""
     if not api_key:
         return KeyStatus(False, "missing", f"No API key found. {FIX_HINT}")
@@ -106,7 +106,7 @@ def check_api_key(api_key: Optional[str]) -> KeyStatus:
 # --- Structured calls ------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def _schema_for(model_cls: type[BaseModel]) -> dict:
     # The SDK helper moves constraints the API doesn't support (min/max, lengths) into field
     # descriptions; Pydantic still enforces them when we validate the response below.
@@ -114,9 +114,7 @@ def _schema_for(model_cls: type[BaseModel]) -> dict:
 
 
 def _cost(input_tokens: int, output_tokens: int) -> float:
-    return (
-        input_tokens * config.PRICE_INPUT_PER_MTOK + output_tokens * config.PRICE_OUTPUT_PER_MTOK
-    ) / 1_000_000
+    return (input_tokens * config.PRICE_INPUT_PER_MTOK + output_tokens * config.PRICE_OUTPUT_PER_MTOK) / 1_000_000
 
 
 class LLM:
@@ -173,9 +171,7 @@ class LLM:
 
             if response.stop_reason == "refusal":
                 trace.append(event.model_copy(update={"error": "refusal"}))
-                raise RefusalError(
-                    "The model declined this request. Try rephrasing it as a gentle bedtime story idea."
-                )
+                raise RefusalError("The model declined this request. Try rephrasing it as a gentle bedtime story idea.")
             if response.stop_reason == "max_tokens":
                 trace.append(event.model_copy(update={"error": "max_tokens"}))
                 failure = "truncated"

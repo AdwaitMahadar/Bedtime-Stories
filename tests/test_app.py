@@ -113,7 +113,9 @@ def test_out_of_scope_request_gets_a_redirect_and_no_story():
 
 def test_off_topic_follow_up_leaves_the_story_unchanged():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)], judge=[verdict(4)],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[verdict(4)],
         followup=[intent(status="out_of_scope")],
     )
     at = tell_story(start(llm))
@@ -160,8 +162,10 @@ def test_slider_labels_match_the_control_text():
 
 def test_review_panel_lists_the_must_fix_problems_that_sent_a_draft_back():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)],
-        judge=[failing("safety"), verdict(4)], reviser=[draft(600, word="cozy")],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[failing("safety"), verdict(4)],
+        reviser=[draft(600, word="cozy")],
     )
     at = tell_story(start(llm))
     panel = "\n".join(m.value for m in at.markdown)

@@ -2,9 +2,9 @@
 
 import pytest
 
-from storyteller.models import ChildProfile, Draft, StoryControls, StoryRequest
-from storyteller.pipeline import UNCHANGED, StoryPipeline, gate, pick_best, soft_failures
 from storyteller.checks import check_failures, run_checks
+from storyteller.models import ChildProfile, Draft, StoryControls, StoryRequest
+from storyteller.pipeline import UNCHANGED, StoryPipeline, gate, soft_failures
 
 from .fakes import FakeLLM, brief, draft, failing, intent, verdict
 
@@ -55,8 +55,10 @@ def test_stops_at_max_rounds_and_returns_best_not_last():
 
 def test_length_out_of_range_gets_a_revision_but_does_not_block_passing():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(200)],
-        judge=[verdict(5), verdict(5)], reviser=[draft(600)],
+        analyzer=[brief()],
+        writer=[draft(200)],
+        judge=[verdict(5), verdict(5)],
+        reviser=[draft(600)],
     )
     version = make(llm, max_rounds=2).create(request()).current
     first, second = version.rounds
@@ -66,8 +68,10 @@ def test_length_out_of_range_gets_a_revision_but_does_not_block_passing():
 
 def test_a_story_still_short_after_revising_passes_and_is_not_best_effort():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(200)],
-        judge=[verdict(5), verdict(5)], reviser=[draft(300)],
+        analyzer=[brief()],
+        writer=[draft(200)],
+        judge=[verdict(5), verdict(5)],
+        reviser=[draft(300)],
     )
     version = make(llm, max_rounds=2).create(request()).current
     assert len(version.rounds) == 2 and version.best.passed and version.best.soft_failures
@@ -76,7 +80,8 @@ def test_a_story_still_short_after_revising_passes_and_is_not_best_effort():
 def test_avoid_list_hit_is_a_hard_fail_and_ranks_last():
     profile = ChildProfile(name="Mia", age=6, avoid=["spiders"])
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600, word="spider")],
+        analyzer=[brief()],
+        writer=[draft(600, word="spider")],
         judge=[verdict(5), failing()],
         reviser=[draft(600, word="ladybug")],
     )
@@ -96,7 +101,8 @@ def test_out_of_scope_request_stops_after_the_analyzer():
 def test_judge_sees_the_story_and_its_notes_but_never_the_writer_prompt():
     llm = FakeLLM(
         analyzer=[brief(status="adjusted", adjustments=["Soften the monster."])],
-        writer=[draft(600, notes=["The monster only eats cookies."])], judge=[verdict(4)],
+        writer=[draft(600, notes=["The monster only eats cookies."])],
+        judge=[verdict(4)],
     )
     make(llm).create(request())
     judge_message = next(user for step, user in llm.calls if step == "judge")
@@ -107,8 +113,10 @@ def test_judge_sees_the_story_and_its_notes_but_never_the_writer_prompt():
 
 def test_follow_up_edit_sends_the_parents_own_words_to_the_reviser_and_judge():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)],
-        judge=[verdict(4), verdict(4)], followup=[intent()],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[verdict(4), verdict(4)],
+        followup=[intent()],
         reviser=[draft(600, word="firefly")],
     )
     pipeline = make(llm)
@@ -125,7 +133,9 @@ def test_follow_up_edit_sends_the_parents_own_words_to_the_reviser_and_judge():
 def test_follow_up_asking_for_an_avoid_list_item_is_guarded_in_code():
     profile = ChildProfile(name="Mia", age=6, avoid=["spiders"])
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)], judge=[verdict(4), verdict(4)],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[verdict(4), verdict(4)],
         followup=[intent()],  # the router misses the conflict
         reviser=[draft(600, word="beetle")],
     )
@@ -139,8 +149,10 @@ def test_follow_up_asking_for_an_avoid_list_item_is_guarded_in_code():
 
 def test_quick_action_changes_controls_without_calling_the_router():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)],
-        judge=[verdict(4), verdict(4)], reviser=[draft(350)],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[verdict(4), verdict(4)],
+        reviser=[draft(350)],
     )
     pipeline = make(llm)
     session = pipeline.create(request())
@@ -152,8 +164,10 @@ def test_quick_action_changes_controls_without_calling_the_router():
 
 def test_follow_up_new_story_starts_a_new_session():
     llm = FakeLLM(
-        analyzer=[brief(), brief()], writer=[draft(600), draft(600)],
-        judge=[verdict(4), verdict(4)], followup=[intent(kind="new")],
+        analyzer=[brief(), brief()],
+        writer=[draft(600), draft(600)],
+        judge=[verdict(4), verdict(4)],
+        followup=[intent(kind="new")],
     )
     pipeline = make(llm)
     session = pipeline.create(request())
@@ -165,7 +179,9 @@ def test_follow_up_new_story_starts_a_new_session():
 
 def test_follow_up_out_of_scope_changes_nothing():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)], judge=[verdict(4)],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[verdict(4)],
         followup=[intent(status="out_of_scope")],
     )
     pipeline = make(llm)
@@ -190,8 +206,10 @@ def test_gate_and_pick_best_rules():
 
 def test_follow_up_new_story_that_is_out_of_scope_keeps_the_current_story():
     llm = FakeLLM(
-        analyzer=[brief(), brief(status="out_of_scope")], writer=[draft(600)],
-        judge=[verdict(4)], followup=[intent(kind="new")],
+        analyzer=[brief(), brief(status="out_of_scope")],
+        writer=[draft(600)],
+        judge=[verdict(4)],
+        followup=[intent(kind="new")],
     )
     pipeline = make(llm)
     session = pipeline.create(request())
@@ -201,15 +219,21 @@ def test_follow_up_new_story_that_is_out_of_scope_keeps_the_current_story():
 
 def test_session_trace_records_every_call():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)],
-        judge=[failing(), verdict(4)], reviser=[draft(600)],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[failing(), verdict(4)],
+        reviser=[draft(600)],
     )
     session = make(llm).create(request())
     assert [e.step for e in session.trace] == ["analyzer", "writer", "judge", "reviser", "judge"]
 
 
 def test_reading_level_clearly_above_the_age_band_sends_an_english_draft_back():
-    hard = Draft(title="T", notes=[], text=" ".join(["Considerable extraordinary circumstances necessitated unanticipated deliberation."] * 60))
+    hard = Draft(
+        title="T",
+        notes=[],
+        text=" ".join(["Considerable extraordinary circumstances necessitated unanticipated deliberation."] * 60),
+    )
     checks = run_checks(hard, StoryControls(length="short"), age=5, avoid=[])
     assert checks.reading_grade > checks.grade_max + 1
     assert gate(verdict(5), checks) == []  # never blocks a pass on its own
@@ -221,9 +245,16 @@ def test_reading_level_clearly_above_the_age_band_sends_an_english_draft_back():
 
 def test_writer_gets_the_request_checks_adjustments_topic_and_language():
     llm = FakeLLM(
-        analyzer=[brief(status="adjusted", adjustments=["The monster eats cookies, not people."],
-                        sensitive_topic="a new baby brother", language="es")],
-        writer=[draft(600)], judge=[verdict(4)],
+        analyzer=[
+            brief(
+                status="adjusted",
+                adjustments=["The monster eats cookies, not people."],
+                sensitive_topic="a new baby brother",
+                language="es",
+            )
+        ],
+        writer=[draft(600)],
+        judge=[verdict(4)],
     )
     session = make(llm).create(request())
     writer_message = next(user for step, user in llm.calls if step == "writer")
@@ -251,7 +282,9 @@ def test_budget_for_a_follow_up_counts_only_that_follow_up():
     from storyteller.budget import Budget
 
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)], judge=[verdict(4), failing(), verdict(4)],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[verdict(4), failing(), verdict(4)],
         reviser=[draft(350), draft(350)],
     )
     pipeline = make(llm, budget=Budget(max_calls=4))
@@ -283,13 +316,17 @@ def test_parent_notes_are_kept_only_when_the_request_was_changed():
     assert make(llm).create(request()).current.best.draft.notes == []
 
     softened = draft(600, notes=["The monster only eats cookies."])
-    llm = FakeLLM(analyzer=[brief(status="adjusted", adjustments=["Soften the monster."])], writer=[softened], judge=[verdict(4)])
+    llm = FakeLLM(
+        analyzer=[brief(status="adjusted", adjustments=["Soften the monster."])], writer=[softened], judge=[verdict(4)]
+    )
     assert make(llm).create(request()).current.best.draft.notes == ["The monster only eats cookies."]
 
 
 def test_a_follow_up_that_changes_nothing_is_sent_back_with_the_parents_words():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)], judge=[verdict(4), verdict(4), verdict(4)],
+        analyzer=[brief()],
+        writer=[draft(600)],
+        judge=[verdict(4), verdict(4), verdict(4)],
         followup=[intent()],
         reviser=[draft(600), draft(600, word="spooky")],  # first revision returns the same story
     )
@@ -314,6 +351,7 @@ def test_judge_is_told_the_real_life_topic_and_writer_gets_name_ideas():
 
 def test_name_ideas_are_varied_and_never_the_overused_favourites():
     import random
+
     from storyteller.names import NAMES, name_ideas
 
     assert len(set(NAMES)) == len(NAMES) and not {"Pip", "Pim", "Biscuit"} & set(NAMES)
@@ -331,5 +369,7 @@ def test_stray_closing_brackets_from_the_model_are_trimmed():
     assert tidy("How about a story instead?}") == "How about a story instead?"
     assert tidy("  The end.]  ") == "The end."
     assert tidy("A box {of buttons}") == "A box {of buttons}"  # balanced brackets are kept
-    assert brief(status="out_of_scope", redirect_message="Let's tell a story.}").redirect_message == "Let's tell a story."
+    assert (
+        brief(status="out_of_scope", redirect_message="Let's tell a story.}").redirect_message == "Let's tell a story."
+    )
     assert Draft(text="Goodnight.}", title="Moon}", notes=["Note.]"]).text == "Goodnight."

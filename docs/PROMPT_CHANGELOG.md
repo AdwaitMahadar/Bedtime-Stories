@@ -168,3 +168,20 @@ Full reports: [v9-3rounds](../eval/results/v9-3rounds/report.md) and [v9-3rounds
 - The two 2-round runs ended at 0.46 and 0.38 problems per story, but their first drafts also differed a lot (0.85 and 0.54), so the third round's benefit can't be separated from run-to-run noise. It's kept because it costs nothing unless a real problem is left.
 - **What remains:** the judge is still inconsistent from call to call (the same line can be flagged in one review and not the next), and stated morals and occasional over-cautious safety flags are the most common issues.
 
+### Checking the measurement itself
+
+Two checks on the final prompts, so the numbers above aren't only the judge grading its own homework on tuned cases:
+
+- **Does the judge catch problems? (`python -m eval.judge_check`)** 13 short hand-written stories: 10 with exactly one planted must-fix problem (a stated moral, a pronoun change, a title naming someone absent, a secret kept from parents, a child at the stove alone, death described as sleep, a missing requested element, notes that don't match, a cliffhanger ending, vocabulary far too hard for a 5-year-old) and 3 clean ones, two of them testing over-reach (ordinary independence, a cat climbing a tree, a softened spooky request). Result, 2 calls each: **the planted problem was caught with the right kind in 20 of 20 calls, and no clean story was blocked (0 of 6)**. These problems are clear and of exactly the kinds the checklist names, so this shows the checklist works; reading the stories shows what the judge still misses: small slips and inconsistent calls near the line. Report: [judge-check-v9](../eval/results/judge-check-v9/report.md).
+- **Fresh requests (`python -m eval.run_eval --set heldout`).** 9 requests written after tuning finished (a new baby sister, a pirate battle, a story request with a homework question attached, a long calm story…), run once. Report: [v9-heldout](../eval/results/v9-heldout/report.md).
+
+| Held-out, run once | Writer only (no judge) | With judge loop |
+|---|---|---|
+| Must-fix problems per story | 0.06 | 0.11 |
+| Pass rate | 83% | 89% |
+| Length in range | 89% | 100% |
+| Cost per story | $0.0024 | $0.0053 |
+| Latency | 21 s | 38 s |
+
+On fresh requests the writer alone is already very clean, so the loop's visible contribution is length and a small pass-rate gain. The problem counts are within noise: one story was the same text before and after the loop and was scored 0 and then 0.5. All 9 requests got the expected treatment (the pirate battle was softened into confetti cannons and wooden swords; the rest were told as asked).
+

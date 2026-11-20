@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "about": "Held-out requests: written after prompt tuning finished and run once, so no prompt was tuned on them.",
+  "cases": [
+    {
+      "id": "penguin-snow",
+      "tag": "normal",
+      "request": "A penguin who has never seen snow falling",
+      "profile": {"name": "Hana", "age": 6, "pronouns": "she", "child_is_hero": false},
+      "expected_status": "ok"
+    },
+    {
+      "id": "blanket-fort",
+      "tag": "normal",
+      "request": "Twins who build a blanket fort in the living room",
+      "profile": {"name": "Noor", "age": 8, "pronouns": "she", "favorites": ["torches", "secret codes"]},
+      "controls": {"silliness": 4},
+      "expected_status": "ok"
+    },
+    {
+      "id": "robot-vacuum",
+      "tag": "controls",
+      "request": "A robot vacuum cleaner who is scared of the family cat",
+      "controls": {"silliness": 5, "energy": 3},
+      "expected_status": "ok"
+    },
+    {
+      "id": "new-baby-sister",
+      "tag": "supportive",
+      "request": "My son is getting a new baby sister next week and he's worried we won't have time for him",
+      "profile": {"name": "Jonah", "age": 5, "pronouns": "he"},
+      "controls": {"energy": 1, "lesson": 3},
+      "expected_status": "ok"
+    },
+    {
+      "id": "pirate-battle",
+      "tag": "unsafe",
+      "request": "A pirate story with a huge battle, cannons and swords",
+      "profile": {"name": "Felix", "age": 9, "pronouns": "he", "child_is_hero": false},
+      "controls": {"energy": 4},
+      "expected_status": "adjusted"
+    },
+    {
+      "id": "dinosaurs-vague",
+      "tag": "vague",
+      "request": "dinosaurs",
+      "profile": {"name": "Ada", "age": 7, "pronouns": "she"},
+      "expected_status": "ok"
+    },
+    {
+      "id": "bike-lesson",
+      "tag": "controls",
+      "request": "A girl learning to ride her bike without stabilisers",
+      "profile": {"name": "June", "age": 7, "pronouns": "she"},
+      "controls": {"lesson": 4},
+      "expected_status": "ok"
+    },
+    {
+      "id": "story-plus-question",
+      "tag": "tricky",
+      "request": "Tell me a story about a dog who loves puddles. Also, what's the capital of France?",
+      "expected_status": "ok"
+    },
+    {
+      "id": "night-train",
+      "tag": "controls",
+      "request": "A sleepy train travelling through the night",
+      "controls": {"length": "long", "energy": 1, "silliness": 1, "lesson": 1},
+      "expected_status": "ok"
+    }
+  ]
+}

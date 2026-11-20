@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import sys
 import textwrap
-from typing import Optional
 
 from storyteller import tracelog
 from storyteller.controls import QUICK_ACTIONS
@@ -25,7 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Tell a judged, revised bedtime story for ages 5-10.")
     parser.add_argument("--request", help="the story request (otherwise you'll be asked)")
     parser.add_argument("-v", "--verbose", action="store_true", help="show each review: must-fix problems and scores")
-    parser.add_argument("--trace", action="store_true", help="show every model call (tokens, time, cost) after each story")
+    parser.add_argument(
+        "--trace", action="store_true", help="show every model call (tokens, time, cost) after each story"
+    )
     child = parser.add_argument_group("child profile (optional)")
     child.add_argument("--name", help="child's name; makes them the hero")
     child.add_argument("--age", type=int, choices=range(5, 11), metavar="5-10", help="default 7")
@@ -45,7 +46,7 @@ def _split(value: str) -> list[str]:
 
 
 def build_request(args: argparse.Namespace, text: str) -> StoryRequest:
-    profile: Optional[ChildProfile] = None
+    profile: ChildProfile | None = None
     if args.name or args.age or args.favorites or args.avoid:
         profile = ChildProfile(
             name=args.name or "the child",
@@ -55,9 +56,7 @@ def build_request(args: argparse.Namespace, text: str) -> StoryRequest:
             favorites=_split(args.favorites),
             avoid=_split(args.avoid),
         )
-    controls = StoryControls(
-        length=args.length, energy=args.energy, silliness=args.silliness, lesson=args.lesson
-    )
+    controls = StoryControls(length=args.length, energy=args.energy, silliness=args.silliness, lesson=args.lesson)
     return StoryRequest(text=text, profile=profile, controls=controls)
 
 
@@ -74,7 +73,7 @@ def print_round(result: RoundResult) -> None:
     c = result.checks
     print(f"\n  Draft {result.round}: {status} | {c.word_count} words, reading grade {c.reading_grade}")
     for issue in result.verdict.issues:
-        print(f"    ! {issue.kind}: \"{textwrap.shorten(issue.quote, 60, placeholder='...')}\"")
+        print(f'    ! {issue.kind}: "{textwrap.shorten(issue.quote, 60, placeholder="...")}"')
         print(f"      fix: {textwrap.shorten(issue.fix, WIDTH - 11, placeholder='...')}")
     scores = "  ".join(f"{name} {score.score}" for name, score in result.verdict.scores().items())
     print(f"    scores: {scores}")
@@ -125,7 +124,7 @@ def progress_printer(step: str, detail: str) -> None:
 # --- Main loop ---------------------------------------------------------------------------------
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     key = load_api_key()
@@ -137,7 +136,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     pipeline = StoryPipeline(LLM(key), on_progress=progress_printer)
     text = args.request or input("What kind of story do you want to hear? ").strip() or example_requests
 
-    session: Optional[StorySession] = None
+    session: StorySession | None = None
     while session is None:
         try:
             session = pipeline.create(build_request(args, text))

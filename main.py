@@ -24,7 +24,7 @@ WIDTH = 88
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Tell a judged, revised bedtime story for ages 5-10.")
     parser.add_argument("--request", help="the story request (otherwise you'll be asked)")
-    parser.add_argument("-v", "--verbose", action="store_true", help="show the judge's scores and notes each round")
+    parser.add_argument("-v", "--verbose", action="store_true", help="show each review: must-fix problems and scores")
     parser.add_argument("--trace", action="store_true", help="show every model call (tokens, time, cost) after each story")
     child = parser.add_argument_group("child profile (optional)")
     child.add_argument("--name", help="child's name; makes them the hero")
@@ -70,23 +70,23 @@ def wrap(text: str, indent: str = "") -> str:
 
 
 def print_round(result: RoundResult) -> None:
-    status = "PASSED" if result.passed else "needs work"
+    status = "PASSED" if result.passed else "sent back"
     c = result.checks
-    print(f"\n  Round {result.round}: {status} | {c.word_count} words, reading grade {c.reading_grade}")
-    for name, score in result.verdict.scores().items():
-        line = f"    {name:<17} {score.score}/5"
-        if score.score < 4 and score.fix:
-            line += "  -> " + textwrap.shorten(score.fix, WIDTH, placeholder="...")
-        print(line)
-    for failure in result.failures:
-        if "scored" not in failure:
-            print(f"    ! {failure}")
+    print(f"\n  Draft {result.round}: {status} | {c.word_count} words, reading grade {c.reading_grade}")
+    for issue in result.verdict.issues:
+        print(f"    ! {issue.kind}: \"{textwrap.shorten(issue.quote, 60, placeholder='...')}\"")
+        print(f"      fix: {textwrap.shorten(issue.fix, WIDTH - 11, placeholder='...')}")
+    scores = "  ".join(f"{name} {score.score}" for name, score in result.verdict.scores().items())
+    print(f"    scores: {scores}")
+    for failure in result.failures + result.soft_failures:
+        if failure.split(":")[0] not in {i.kind for i in result.verdict.issues}:
+            print(f"    ! {textwrap.shorten(failure, WIDTH - 6, placeholder='...')}")
 
 
 def print_story(session: StorySession, verbose: bool) -> None:
     version = session.current
     best = version.best
-    notes = version.notes if version.number > 1 else session.brief.adjustments + session.brief.assumptions
+    notes = best.draft.notes
     if verbose:
         for result in version.rounds:
             print_round(result)
@@ -95,7 +95,7 @@ def print_story(session: StorySession, verbose: bool) -> None:
     print(best.draft.title.upper().center(WIDTH))
     meta = (
         f"{best.checks.word_count} words · ~{best.checks.read_minutes:g} min read aloud · "
-        f"{len(version.rounds)} judge round(s) · ${session.total_cost:.4f} so far"
+        f"{len(version.rounds)} review(s) · ${session.total_cost:.4f} so far"
     )
     print(meta.center(WIDTH))
     print("=" * WIDTH)

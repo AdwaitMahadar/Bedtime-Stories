@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from . import config
 from .checks import check_failures, reading_level_note
 from .controls import AGE_GUIDANCE, age_band, describe_controls, length_plan
 from .llm import LLM
+from .names import name_ideas
 from .models import (
     CheckResults,
     Draft,
@@ -83,48 +84,44 @@ def _story(draft: Draft) -> str:
     return f"Title: {draft.title}\n\n{draft.text}"
 
 
-def _brief(brief: StoryBrief) -> str:
-    return brief.model_dump_json(indent=2, exclude={"status", "redirect_message", "assumptions"})
-
-
-def _decisions(brief: StoryBrief) -> str:
-    notes = brief.adjustments + brief.assumptions
-    return "\n".join(f"- {n}" for n in notes) or "(none)"
+def _list(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items) or "(none)"
 
 
 def _checks(checks: CheckResults) -> str:
+    grade_note = "advisory" if checks.language == "en" else "not meaningful: the story isn't in English"
     return "\n".join(
         [
             f"Word count: {checks.word_count} (allowed {checks.length_min}-{checks.length_max}, "
             f"target {checks.length_target}) -> {'OK' if checks.length_ok else 'OUT OF RANGE'}",
-            f"Reading grade (Flesch-Kincaid, advisory): {checks.reading_grade} "
+            f"Reading grade (Flesch-Kincaid, {grade_note}): {checks.reading_grade} "
             f"(typical for this age: {checks.grade_min}-{checks.grade_max})",
             f"Avoid-list matches: {', '.join(checks.avoid_hits) or 'none'}",
         ]
     )
 
 
-def _feedback(verdict: JudgeVerdict) -> str:
-    """Only the criteria below the pass bar: the reviser should change what's flagged and nothing else."""
-    items = []
-    for name, score in verdict.scores().items():
-        if score.score < config.PASS_MIN_SCORE:
-            items.append(
-                f"- {name} scored {score.score}/5\n  Problem: {score.evidence}\n  Fix: {score.fix}"
-            )
-    return "\n".join(items) or "No criteria below the bar."
+def _issues(verdict: JudgeVerdict) -> str:
+    """The must-fix issues, plus any criterion that failed outright: the reviser changes only these."""
+    items = [f"- [{i.kind}] \"{i.quote}\"\n  Fix: {i.fix}" for i in verdict.issues]
+    items += [
+        f"- [{name}] scored {score.score}/5: {score.note}"
+        for name, score in verdict.scores().items()
+        if score.score <= config.FAIL_MAX_SCORE
+    ]
+    return "\n".join(items) or "(none)"
 
 
 # --- Steps -----------------------------------------------------------------------------------
 
 
 def analyze(llm: LLM, request: StoryRequest, trace: list[TraceEvent]) -> StoryBrief:
+    """Request check: tell it as asked, soften it, or redirect. It plans nothing about the story."""
     user = _message(
         _tag("user_request", request.text),
         _tag("child_profile", _profile(request)),
         _tag("avoid_list", _avoid(request)),
-        _tag("controls", _controls(request)),
-        task="Write the story brief for this request.",
+        task="Check this request.",
     )
     return llm.structured(
         step="analyzer", system=load_prompt("analyzer"), user=user, schema=StoryBrief, trace=trace
@@ -132,14 +129,12 @@ def analyze(llm: LLM, request: StoryRequest, trace: list[TraceEvent]) -> StoryBr
 
 
 def write(llm: LLM, request: StoryRequest, brief: StoryBrief, trace: list[TraceEvent]) -> Draft:
-    """First draft from one well-specified prompt: the request, profile, age, controls and word budget.
+    """The story and the parent's notes, from one well-specified prompt.
 
-    Of the brief, the writer gets only the parent-facing choices (adjustments and assumptions), so
-    the story matches the notes the parent sees. The full brief is left out: its adult planning
-    language pulled the writing above the child's reading level (eval v3).
-
-    An earlier version planned an outline first (planner -> writer). Evals showed no quality gain
-    over this single prompt, so the planner was removed; see docs/PROMPT_CHANGELOG.md (v4).
+    The writer gets the request check's adjustments, not a plan: it makes every creative choice and
+    writes the notes about them, so the notes always describe the story it wrote. (Earlier designs
+    planned the story first; evals and QA showed the plan added no quality and the notes drifted from
+    the story. See docs/PROMPT_CHANGELOG.md.)
     """
     user = _message(
         _tag("user_request", request.text),
@@ -148,8 +143,11 @@ def write(llm: LLM, request: StoryRequest, brief: StoryBrief, trace: list[TraceE
         _tag("controls", _controls(request)),
         _tag("length_plan", length_plan(request.controls)),
         _tag("avoid_list", _avoid(request)),
-        _tag("decisions", _decisions(brief)),
-        task="Write the full story.",
+        _tag("adjustments", _list(brief.adjustments)),
+        _tag("sensitive_topic", brief.sensitive_topic or "(none)"),
+        _tag("language", brief.language),
+        _tag("name_ideas", ", ".join(name_ideas())),
+        task="Write the full story and the parent notes.",
     )
     return llm.structured(step="writer", system=load_prompt("writer"), user=user, schema=Draft, trace=trace)
 
@@ -161,18 +159,21 @@ def judge(
     checks: CheckResults,
     adjustments: list[str],
     trace: list[TraceEvent],
+    sensitive_topic: Optional[str] = None,
 ) -> JudgeVerdict:
-    """Score a draft. Gets the original request and the rubric, never the writer's prompt."""
+    """List must-fix issues and score the draft. Gets the request and the rubric, never the writer's prompt."""
     user = _message(
         _tag("user_request", request.text),
         _tag("child_profile", _profile(request)),
         _tag("age_guidance", _age(request)),
         _tag("controls", _controls(request)),
-        _tag("adjustments", "\n".join(f"- {a}" for a in adjustments) or "(none)"),
+        _tag("adjustments", _list(adjustments)),
+        _tag("sensitive_topic", sensitive_topic or "(none)"),
         _tag("avoid_list", _avoid(request)),
         _tag("code_checks", _checks(checks)),
+        _tag("parent_notes", _list(draft.notes)),
         _tag("story", _story(draft)),
-        task="Review the story and score all 7 criteria.",
+        task="List the must-fix issues and score all 7 criteria.",
     )
     return llm.structured(step="judge", system=load_prompt("judge"), user=user, schema=JudgeVerdict, trace=trace)
 
@@ -180,44 +181,51 @@ def judge(
 def revise(
     llm: LLM,
     request: StoryRequest,
-    brief: StoryBrief,
     draft: Draft,
+    adjustments: list[str],
     trace: list[TraceEvent],
     verdict: Optional[JudgeVerdict] = None,
     checks: Optional[CheckResults] = None,
-    instruction: Optional[str] = None,
+    parent_request: Optional[str] = None,
+    extra_failures: Sequence[str] = (),
 ) -> Draft:
-    """Improve a draft from judge feedback, a parent's instruction, or both."""
+    """Improve a draft from the judge's issues, a parent's change request, or both.
+
+    The parent's request arrives in their own words, never paraphrased by another step (in testing,
+    a paraphrase turned "make the pigeon a boy named Pip" into a human boy).
+    """
     sections = [
         _tag("user_request", request.text),
-        _tag("brief", _brief(brief)),
         _tag("controls", _controls(request)),
         _tag("length_plan", length_plan(request.controls)),
         _tag("age_guidance", _age(request)),
         _tag("avoid_list", _avoid(request)),
+        _tag("adjustments", _list(adjustments)),
+        _tag("parent_notes", _list(draft.notes)),
         _tag("story", _story(draft)),
     ]
     if verdict is not None:
-        sections.append(_tag("judge_feedback", _feedback(verdict)))
+        sections.append(_tag("issues", _issues(verdict)))
     if checks is not None:
-        measured = check_failures(checks) + reading_level_note(checks)
-        sections.append(_tag("code_check_failures", "\n".join(measured) or "(none)"))
-    if instruction:
-        sections.append(_tag("parent_instruction", instruction))
-    user = _message(*sections, task="Return the complete revised story.")
+        measured = check_failures(checks) + reading_level_note(checks) + list(extra_failures)
+        sections.append(_tag("code_check_failures", _list(measured)))
+    if parent_request:
+        sections.append(_tag("parent_request", parent_request))
+    user = _message(*sections, task="Return the complete revised story and its parent notes.")
     return llm.structured(step="reviser", system=load_prompt("reviser"), user=user, schema=Draft, trace=trace)
 
 
 def route_followup(
     llm: LLM, request: StoryRequest, draft: Draft, message: str, trace: list[TraceEvent]
 ) -> FollowUpIntent:
+    """Classify a follow-up (edit, new story, or off-topic) and say what must be softened. No rewriting."""
     user = _message(
         _tag("user_request", request.text),
         _tag("child_profile", _profile(request)),
         _tag("avoid_list", _avoid(request)),
         _tag("story", _story(draft)),
         _tag("parent_message", message),
-        task="Route the parent's follow-up message.",
+        task="Classify the parent's follow-up message.",
     )
     return llm.structured(
         step="followup", system=load_prompt("followup"), user=user, schema=FollowUpIntent, trace=trace

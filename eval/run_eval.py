@@ -9,13 +9,16 @@ For every case the pipeline runs once, and two of its stories are scored:
   storyteller on its own, so it doubles as the baseline.
 - **final**: the draft chosen after the judge-and-revise loop.
 
-Each story is scored by **fresh** judge calls with the same prompt (`--judge-samples`, default 2),
-averaging each criterion across calls. Averaging reduces judge noise, and the agreement between calls
-is reported as a measure of judge consistency. The judge scores from inside the loop are not reused:
+Each story is scored by **fresh** judge calls with the same prompt (`--judge-samples`, default 2).
+The headline number is **must-fix issues per story** (safety, consistency, missing request, notes
+mismatch, stated moral, lively ending, wrong age level), averaged over calls. A story's pass rate is
+the share of calls that found no issue and no score of 2 or less (with code checks passing). Scores
+are averaged per criterion. Agreement between calls is reported as a measure of judge consistency. The judge scores from inside the loop are not reused:
 the loop keeps the best-scoring draft, so its own scores are biased upward.
 Outputs go to `eval/results/<label>/`: report.md, stories.md, results.json.
 
-Results up to v4 also compared an older planner -> writer design; see docs/PROMPT_CHANGELOG.md.
+Results up to v4 also compared an older planner -> writer design, and up to v7 a story passed on
+"every score >= 4"; see docs/PROMPT_CHANGELOG.md.
 """
 
 from __future__ import annotations
@@ -28,12 +31,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from statistics import mean
-from typing import Optional
+from typing import Optional, get_args
 
 from storyteller import config, stages
 from storyteller.checks import check_failures, run_checks
 from storyteller.llm import LLM, LLMError, check_api_key, load_api_key
-from storyteller.models import CRITERIA, ChildProfile, Draft, StoryControls, StoryRequest, TraceEvent
+from storyteller.models import CRITERIA, ChildProfile, Draft, IssueKind, StoryControls, StoryRequest, TraceEvent
 from storyteller.pipeline import StoryPipeline
 
 EVAL_DIR = Path(__file__).parent
@@ -53,33 +56,37 @@ def to_request(case: dict) -> StoryRequest:
 
 def score(
     llm: LLM, request: StoryRequest, draft: Draft, trace: list[TraceEvent], samples: int = 1,
-    adjustments: Optional[list[str]] = None,
+    adjustments: Optional[list[str]] = None, language: str = "en", sensitive_topic: Optional[str] = None,
 ) -> dict:
-    """Code checks plus `samples` fresh, independent judge calls for one story, averaged per criterion.
+    """Code checks plus `samples` fresh, independent judge calls for one story.
 
-    The judge gets the analyzer's adjustments, exactly as the in-app judge does, so a deliberately
-    softened request (a monster with a harmless appetite) is judged the same way in both places.
+    The judge gets the request check's adjustments and the story's parent notes, exactly as the
+    in-app judge does, so a deliberately softened request is judged the same way in both places.
     """
-    checks = run_checks(draft, request.controls, request.age, request.avoid)
+    checks = run_checks(draft, request.controls, request.age, request.avoid, language)
     verdicts = [
-        stages.judge(llm, request, draft, checks, adjustments=adjustments or [], trace=trace) for _ in range(samples)
+        stages.judge(llm, request, draft, checks, adjustments=adjustments or [], trace=trace, sensitive_topic=sensitive_topic)
+        for _ in range(samples)
     ]
     per_criterion = {c: mean(getattr(v, c).score for v in verdicts) for c in CRITERIA}
-    failures = check_failures(checks) + [c for c, s in per_criterion.items() if s < config.PASS_MIN_SCORE]
+    measured_ok = not check_failures(checks)
 
     def passes(v) -> bool:  # the eval's fixed pass definition, for one judge call
-        return not check_failures(checks) and v.min_score >= config.PASS_MIN_SCORE
+        return measured_ok and not v.issues and v.min_score > config.FAIL_MAX_SCORE
 
     result = {
         "title": draft.title,
         "text": draft.text,
+        "notes": draft.notes,
         "checks": checks.model_dump(),
         "verdict": verdicts[0].model_dump(),
         "verdicts": [v.model_dump() for v in verdicts],
         "scores": per_criterion,
         "mean": round(mean(per_criterion.values()), 2),
         "min": round(min(per_criterion.values()), 2),
-        "passed": not failures,
+        "issues": mean(len(v.issues) for v in verdicts),
+        "issue_kinds": [i.kind for v in verdicts for i in v.issues],
+        "passed": mean(passes(v) for v in verdicts),  # share of judge calls that pass the story
     }
     if samples > 1:
         same = [len({getattr(v, c).score for v in verdicts}) == 1 for c in CRITERIA]
@@ -102,19 +109,20 @@ def run_case(llm: LLM, case: dict, max_rounds: int, judge_samples: int = 1) -> d
         session = StoryPipeline(llm, max_rounds=max_rounds).create(request)
         latency = round(time.monotonic() - started, 1)
         brief = session.brief
-        result.update(status=brief.status, category=brief.category,
-                      adjustments=brief.adjustments, assumptions=brief.assumptions)
+        result.update(status=brief.status, adjustments=brief.adjustments, language=brief.language)
         if brief.status == "out_of_scope":
             result["redirect_message"] = brief.redirect_message
             return result
 
         version = session.current
         result["rounds"] = len(version.rounds)
-        result["in_loop_min_scores"] = [r.verdict.min_score for r in version.rounds]
+        result["in_loop_failures"] = [r.failures + r.soft_failures for r in version.rounds]
         writer = [e for e in session.trace if e.step == "writer"]
-        first = score(llm, request, version.rounds[0].draft, judge_trace, judge_samples, brief.adjustments)
+        first = score(llm, request, version.rounds[0].draft, judge_trace, judge_samples, brief.adjustments, brief.language,
+                      brief.sensitive_topic)
         first.update(latency_s=round(sum(e.latency_ms for e in writer) / 1000, 1), cost_usd=_cost(writer))
-        final = score(llm, request, version.best.draft, judge_trace, judge_samples, brief.adjustments)
+        final = score(llm, request, version.best.draft, judge_trace, judge_samples, brief.adjustments, brief.language,
+                      brief.sensitive_topic)
         final.update(latency_s=latency, cost_usd=_cost(session.trace))
         result["variants"]["first_draft"] = first
         result["variants"]["final"] = final
@@ -149,7 +157,9 @@ def summarize(results: list[dict]) -> dict:
         summary[variant] = {
             "mean": _avg([x["mean"] for x in rows]),
             "min": _avg([x["min"] for x in rows]),
-            "pass_rate": _pct([x["passed"] for x in rows]),
+            "pass_rate": f"{100 * mean(x['passed'] for x in rows):.0f}%" if rows else "—",
+            "issues": _avg([x["issues"] for x in rows]),
+            "issue_kinds": {k: sum(x["issue_kinds"].count(k) for x in rows) for k in get_args(IssueKind)},
             "length_ok": _pct([x["checks"]["length_ok"] for x in rows]),
             "avoid_hits": sum(len(x["checks"]["avoid_hits"]) for x in rows),
             "criteria": {c: _avg([x["scores"][c] for x in rows]) for c in CRITERIA},
@@ -178,7 +188,8 @@ def render_report(results: list[dict], label: str, max_rounds: int, judge_sample
         "",
         f"{datetime.now():%Y-%m-%d %H:%M} · model `{config.MODEL}` · {len(results)} cases "
         f"({len(scored)} scored) · max {max_rounds} judge rounds · {judge_samples} judge call(s) per story · "
-        f"pass = every criterion ≥ {config.PASS_MIN_SCORE} (averaged over calls), length in range, no avoid-list hits",
+        f"pass = no must-fix issue, no score ≤ {config.FAIL_MAX_SCORE}, length within ±{config.LENGTH_TOLERANCE:.0%}, "
+        "no avoid-list hits (share of judge calls that pass)",
         "",
         "Every story is re-scored by fresh judge calls. *Writer only* is the first draft before any judge feedback: "
         "the single-prompt storyteller on its own.",
@@ -187,6 +198,7 @@ def render_report(results: list[dict], label: str, max_rounds: int, judge_sample
         "",
         "| | " + " | ".join(LABELS[v] for v in VARIANTS) + " |",
         "|---|" + "---|" * len(VARIANTS),
+        "| Must-fix issues per story | " + " | ".join(s[v]["issues"] for v in VARIANTS) + " |",
         "| Mean score (1-5) | " + " | ".join(s[v]["mean"] for v in VARIANTS) + " |",
         "| Mean lowest criterion | " + " | ".join(s[v]["min"] for v in VARIANTS) + " |",
         "| Pass rate | " + " | ".join(s[v]["pass_rate"] for v in VARIANTS) + " |",
@@ -223,6 +235,15 @@ def render_report(results: list[dict], label: str, max_rounds: int, judge_sample
         lines.append(f"| {criterion} | " + " | ".join(s[v]["criteria"][criterion] for v in VARIANTS) + " |")
     lines += [
         "",
+        "## Must-fix issues by kind (total over all judge calls)",
+        "",
+        "| Kind | " + " | ".join(LABELS[v] for v in VARIANTS) + " |",
+        "|---|" + "---|" * len(VARIANTS),
+    ]
+    for kind in get_args(IssueKind):
+        lines.append(f"| {kind} | " + " | ".join(str(s[v]["issue_kinds"][kind]) for v in VARIANTS) + " |")
+    lines += [
+        "",
         "## By case",
         "",
         "| Case | Tag | Status (expected) | " + " | ".join(LABELS[v] for v in VARIANTS) + " | Rounds |",
@@ -233,7 +254,7 @@ def render_report(results: list[dict], label: str, max_rounds: int, judge_sample
         cells = []
         for v in VARIANTS:
             x = r["variants"].get(v)
-            cells.append(f"{x['mean']:.2f} / min {x['min']:g}{' ✓' if x['passed'] else ''}" if x else "—")
+            cells.append(f"{x['issues']:g} issues · {x['mean']:.2f}{' ✓' if x['passed'] == 1 else ''}" if x else "—")
         lines.append(f"| {r['id']} | {r['tag']} | {status} | " + " | ".join(cells) + f" | {r.get('rounds', '—')} |")
     errors = [r for r in results if r.get("error")]
     if errors:
@@ -248,9 +269,9 @@ def render_stories(results: list[dict]) -> str:
     for r in results:
         out += [f"## {r['id']} ({r['tag']})", "", f"**Request:** {r['request']}", ""]
         if r.get("status"):
-            out.append(f"**Status:** {r['status']} (expected {r.get('expected_status')}) · category: {r.get('category')}")
-        for note in r.get("adjustments", []) + r.get("assumptions", []):
-            out.append(f"- note: {note}")
+            out.append(f"**Status:** {r['status']} (expected {r.get('expected_status')}) · language: {r.get('language')}")
+        for adjustment in r.get("adjustments", []):
+            out.append(f"- adjustment: {adjustment}")
         if r.get("redirect_message"):
             out += ["", f"**Redirect:** {r['redirect_message']}"]
         if r.get("error"):
@@ -261,8 +282,10 @@ def render_stories(results: list[dict]) -> str:
                 continue
             c = x["checks"]
             out += ["", f"### {LABELS[v]}: *{x['title']}*",
-                    f"mean {x['mean']:.2f}, min {x['min']:g}, {'PASS' if x['passed'] else 'fail'} · "
+                    f"{x['issues']:g} issues · mean {x['mean']:.2f} · passed {x['passed']:.0%} of reviews · "
                     f"{c['word_count']} words (target {c['length_target']}) · grade {c['reading_grade']}",
+                    "", *[f"- note: {n}" for n in x.get("notes", [])],
+                    *[f"- issue ({i['kind']}): \"{i['quote']}\" -> {i['fix']}" for i in x["verdict"]["issues"]],
                     "", f"> Judge: {x['verdict']['summary']}", "", x["text"]]
         out += ["", "---", ""]
     return "\n".join(out)
@@ -298,7 +321,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             final = r["variants"].get("final")
             first = r["variants"].get("first_draft")
             detail = r.get("error") or (
-                f"first draft {first['mean']:.2f} -> final {final['mean']:.2f} in {r['rounds']} round(s)"
+                f"first draft {first['issues']:g} issues -> final {final['issues']:g} in {r['rounds']} review(s)"
                 if final and first else f"status {r.get('status')}"
             )
             print(f"  ✓ {r['id']}: {detail}", flush=True)

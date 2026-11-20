@@ -24,3 +24,6 @@ dist/
 # Local run artifacts (may contain child data)
 logs/
 runs/
+
+# QA run output: full stories for reading, never committed
+eval/qa_runs/

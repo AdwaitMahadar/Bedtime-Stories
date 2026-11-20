@@ -15,6 +15,7 @@ from typing import Callable, Optional, TypeVar, get_args
 import streamlit as st
 
 from storyteller import config, tracelog
+from storyteller.checks import reading_level_note
 from storyteller.controls import CONTROL_LABELS, QUICK_ACTIONS
 from storyteller.llm import LLM, APICallError, KeyStatus, LLMError, check_api_key, load_api_key
 from storyteller.models import Category, StoryControls, StoryRequest, StorySession, StoryVersion
@@ -56,7 +57,7 @@ STEP_ICONS = {
 STYLE = """<style>
 .story { font-family: Georgia, "Iowan Old Style", serif; font-size: 1.15rem; line-height: 1.75;
   padding: 1.5rem 1.75rem; margin: 0.5rem 0 1rem; border-radius: 0.75rem;
-  background: rgba(250, 236, 205, 0.28); border: 1px solid rgba(160, 125, 80, 0.25); }
+  background: rgba(214, 160, 70, 0.09); border: 1px solid rgba(214, 160, 70, 0.3); }
 .story p { margin: 0 0 1em; }
 .story p:last-child { margin-bottom: 0; }
 </style>"""
@@ -83,24 +84,18 @@ def story_html(text: str) -> str:
     return f'<div class="story">{body}</div>'
 
 
-def notes_for(session: StorySession, version: StoryVersion) -> list[str]:
-    """Notes for the parent: what was changed or chosen for the first story, or for a follow-up."""
-    if version.number == 1:
-        return session.brief.adjustments + session.brief.assumptions
-    return version.notes
-
-
 def pick_reason(version: StoryVersion) -> str:
     """Why this version shows the draft it does, in plain words."""
     best = version.best
     rounds = len(version.rounds)
     if best.passed:
+        note = " The length or reading level is still slightly off." if best.soft_failures else ""
         if rounds == 1:
-            return "The first draft passed every check, so it wasn't revised."
-        return f"Round {best.round} passed every check."
+            return "The first draft passed every check, so it wasn't revised." + note
+        return f"Draft {best.round} passed every check after revision." + note
     reason = (
-        f"No draft passed every check in {rounds} round(s), so this shows round {best.round}: "
-        f"it had the highest lowest score ({best.verdict.min_score}/5)."
+        f"No draft passed every check in {rounds} review(s), so this shows draft {best.round}: "
+        f"it had the fewest problems ({len(best.failures)})."
     )
     if version.stopped_early:
         reason += f" Revising stopped early: {version.stopped_early}."
@@ -324,7 +319,7 @@ def show_story(session: StorySession, version: StoryVersion) -> None:
     else:
         row.badge("Best effort", icon=":material/info:", color="orange", help=pick_reason(version))
 
-    notes = notes_for(session, version)
+    notes = best.draft.notes
     if notes:
         st.info("\n".join(f"- {md(note)}" for note in notes), icon=":material/edit_note:")
     if version.stopped_early:
@@ -389,30 +384,33 @@ def apply_follow_up(session: StorySession, **change) -> None:
 
 def how_it_was_made(session: StorySession, version: StoryVersion) -> None:
     with st.expander("How this story was made", icon=":material/insights:"):
-        plan, review, calls = st.tabs(["Plan", "Review rounds", "Model calls"])
-        with plan:
-            show_plan(session, version)
+        check, review, calls = st.tabs(["Request check", "Reviews", "Model calls"])
+        with check:
+            show_request_check(session, version)
         with review:
             show_rounds(version)
         with calls:
             show_calls(session)
 
 
-def show_plan(session: StorySession, version: StoryVersion) -> None:
+def show_request_check(session: StorySession, version: StoryVersion) -> None:
     brief = session.brief
     lines = [
         f"**Request:** {md(session.request.text)}",
         f"**Request check:** {REQUEST_STATUS[brief.status]}",
-        f"**Story type:** {brief.category} · **Tone:** {md(brief.tone)}",
-        f"**Premise:** {md(brief.premise)}",
-        "**Characters:**\n" + "\n".join(f"- **{md(c.name)}**: {md(c.description)}" for c in brief.characters),
-        f"**Settings for this version:** {describe_controls(version.controls)}",
     ]
-    if brief.must_include:
-        lines.insert(4, "**Must include:** " + ", ".join(md(item) for item in brief.must_include))
+    adjustments = brief.adjustments + version.adjustments
+    if adjustments:
+        lines.append("**Changes the story had to make:**\n" + "\n".join(f"- {md(a)}" for a in adjustments))
+    if brief.sensitive_topic:
+        lines.append(f"**Real-life topic, handled with care:** {md(brief.sensitive_topic)}")
+    if brief.language != "en":
+        lines.append(f"**Language:** {brief.language} (the reading-level check only works for English, so it's skipped)")
+    lines.append(f"**Settings for this version:** {describe_controls(version.controls)}")
     st.markdown("\n\n".join(lines))
     if version.instruction:
-        st.markdown("**Change applied in this version:**\n\n" + md(version.instruction))
+        st.markdown("**Change asked for in this version:**\n\n" + md(version.instruction))
+    st.caption("The writer makes every creative choice; the notes above the story are its own.")
 
 
 def mark(ok: bool) -> str:
@@ -420,35 +418,41 @@ def mark(ok: bool) -> str:
 
 
 def score_badge(score: int) -> str:
-    color = "green" if score >= config.PASS_MIN_SCORE else "orange" if score == 3 else "red"
+    color = "green" if score >= 4 else "orange" if score > config.FAIL_MAX_SCORE else "red"
     return f":{color}-badge[{score}/5]"
 
 
 def show_rounds(version: StoryVersion) -> None:
     st.markdown(f"**Shown:** {pick_reason(version)}")
     st.caption(
-        f"A draft passes when every criterion scores at least {config.PASS_MIN_SCORE}/5, the length is "
-        "in range, nothing from the avoid-list appears, and the reading level isn't above the child's age."
+        "A draft passes when the reviewer finds no must-fix problem (safety, consistency, a missing request, "
+        "notes that don't match, a stated moral, a lively ending, the wrong age level), no score is "
+        f"{config.FAIL_MAX_SCORE}/5 or lower, and nothing from the avoid-list appears. A length or reading level "
+        "outside the range gets one revision but doesn't stop a story from passing."
     )
     for index, result in enumerate(version.rounds):
-        status = "passed" if result.passed else "sent back"
+        status = "sent back" if not result.passed else "passed" if result.clean else "passed, length or reading level off"
         shown = " · shown" if index == version.best_round else ""
-        st.markdown(f"**Round {result.round}: {status}{shown}**")
+        st.markdown(f"**Draft {result.round}: {status}{shown}**")
         checks = result.checks
         avoid = f"avoid-list: {', '.join(checks.avoid_hits)}" if checks.avoid_hits else "avoid-list clear"
         st.markdown(" · ".join([
             f"{mark(checks.length_ok)} {checks.word_count} words (allowed {checks.length_min}–{checks.length_max})",
-            f"{mark(checks.reading_grade <= checks.grade_max)} reading grade {checks.reading_grade:g} "
-            f"(up to {checks.grade_max:g} for this age)",
+            f"{mark(not reading_level_note(checks))} reading grade {checks.reading_grade:g} "
+            f"(about {checks.grade_max:g} for this age)" if checks.language == "en" else "reading grade skipped (not English)",
             f"{mark(not checks.avoid_hits)} {avoid}",
         ]))
-        lines = []
-        for name, score in result.verdict.scores().items():
-            line = f"- {score_badge(score.score)} **{name.replace('_', ' ')}**: {md(score.evidence)}"
-            if score.fix:
-                line += f"  \n  *Fix:* {md(score.fix)}"
-            lines.append(line)
-        st.markdown("\n".join(lines))
+        if result.verdict.issues:
+            st.markdown("Must fix:\n" + "\n".join(
+                f"- :red-badge[{issue.kind.replace('_', ' ')}] \"{md(issue.quote)}\"  \n  *Fix:* {md(issue.fix)}"
+                for issue in result.verdict.issues
+            ))
+        else:
+            st.markdown(":green[✓] No must-fix problems found.")
+        st.markdown("\n".join(
+            f"- {score_badge(score.score)} **{name.replace('_', ' ')}**: {md(score.note)}"
+            for name, score in result.verdict.scores().items()
+        ))
         st.caption(f"Reviewer's summary: {md(result.verdict.summary)}")
 
 

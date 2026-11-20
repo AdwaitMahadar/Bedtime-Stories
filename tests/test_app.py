@@ -13,7 +13,7 @@ from storyteller.llm import APICallError, KeyStatus
 from storyteller.models import StoryVersion
 from storyteller.pipeline import StoryPipeline
 
-from .fakes import FakeLLM, brief, draft, intent, verdict
+from .fakes import FakeLLM, brief, draft, failing, intent, verdict
 from .test_pipeline import request
 
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
@@ -74,8 +74,8 @@ def test_rejected_key_shows_its_own_message(monkeypatch):
 
 def test_tells_a_story_with_notes_and_adds_it_to_the_library():
     llm = FakeLLM(
-        analyzer=[brief(status="adjusted", adjustments=["The monster is friendly and only eats pancakes."])],
-        writer=[draft(600)],
+        analyzer=[brief(status="adjusted", adjustments=["Make the monster friendly."])],
+        writer=[draft(600, notes=["The monster is friendly and only eats pancakes."])],
         judge=[verdict(4)],
     )
     at = tell_story(start(llm))
@@ -146,13 +146,24 @@ def test_story_and_model_text_is_escaped():
 
 def test_pick_reason_explains_a_best_effort_draft():
     llm = FakeLLM(
-        analyzer=[brief()], writer=[draft(600)], judge=[verdict(3), verdict(3)], reviser=[draft(600)]
+        analyzer=[brief()], writer=[draft(600)], judge=[failing(), failing("safety", "ending")], reviser=[draft(600)]
     )
     version: StoryVersion = StoryPipeline(llm, max_rounds=2).create(request()).current
-    assert "No draft passed every check in 2 round(s)" in pick_reason(version)
+    assert "No draft passed every check in 2 review(s), so this shows draft 1" in pick_reason(version)
 
 
 def test_slider_labels_match_the_control_text():
     for name, table in (("energy", ENERGY), ("silliness", SILLINESS), ("lesson", LESSON)):
         for value, label in CONTROL_LABELS[name].items():
             assert f"({label.lower()})" in table[value].lower()
+
+
+def test_review_panel_lists_the_must_fix_problems_that_sent_a_draft_back():
+    llm = FakeLLM(
+        analyzer=[brief()], writer=[draft(600)],
+        judge=[failing("safety"), verdict(4)], reviser=[draft(600, word="cozy")],
+    )
+    at = tell_story(start(llm))
+    panel = "\n".join(m.value for m in at.markdown)
+    assert "Draft 1: sent back" in panel and "red-badge[safety]" in panel and "quoted line" in panel
+    assert "Draft 2: passed · shown" in panel and "No must-fix problems found" in panel

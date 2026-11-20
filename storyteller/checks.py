@@ -1,8 +1,8 @@
 """Code checks: what can be measured exactly is measured in code, not by the LLM.
 
-- Length: word count vs the target (affects pass/fail).
-- Reading level: Flesch-Kincaid grade vs the age band. Context for the judge; a grade above the band
-  sends the draft back for one simplifying revision (`reading_level_note`), but isn't a quality score.
+- Length: word count vs the target, with a wide tolerance (affects pass/fail).
+- Reading level: Flesch-Kincaid grade vs the age band. Context for the judge; a grade clearly above
+  the band sends the draft back for simplifying (`reading_level_note`), English only.
 - Avoid-list: whole-word matches of the child's avoid terms (any hit fails the draft).
 """
 
@@ -50,7 +50,7 @@ def find_avoid_hits(text: str, avoid: list[str]) -> list[str]:
     return hits
 
 
-def run_checks(draft: Draft, controls: StoryControls, age: int, avoid: list[str]) -> CheckResults:
+def run_checks(draft: Draft, controls: StoryControls, age: int, avoid: list[str], language: str = "en") -> CheckResults:
     text = f"{draft.title}\n\n{draft.text}"
     words = count_words(draft.text)
     low, high = length_bounds(controls)
@@ -67,27 +67,39 @@ def run_checks(draft: Draft, controls: StoryControls, age: int, avoid: list[str]
         grade_min=grade_min,
         grade_max=grade_max,
         grade_ok=grade_min <= grade <= grade_max,
+        language=language,
         avoid_hits=find_avoid_hits(text, avoid),
     )
 
 
 def reading_level_note(checks: CheckResults) -> list[str]:
-    """A revision note when the draft reads above the child's age band (empty otherwise).
+    """A revision note when the draft reads clearly above the child's age band (empty otherwise).
 
-    The formula is noisy, so this only triggers a simplifying revision inside the pipeline; it is not
-    part of `check_failures`, which defines pass/fail for the eval.
+    The formula is noisy (a grade of 2.9 against a 2.5 limit once cost two revisions that made the story
+    worse), so only a clear miss counts, and only for English, the language the formula is built for.
+    It's not part of `check_failures`, which defines pass/fail for the eval.
     """
-    if checks.reading_grade <= checks.grade_max:
+    if checks.language != "en" or checks.reading_grade <= checks.grade_max + config.READING_GRADE_SLACK:
         return []
     return [
-        f"Reading level too high: grade {checks.reading_grade}, above {checks.grade_max} for this age. "
+        f"Reading level too high: grade {checks.reading_grade}, well above {checks.grade_max} for this age. "
         "Split long sentences, swap harder words and comparisons for ones from the child's everyday world, "
         "and keep the plot, the voice and the calm ending."
     ]
 
 
 def check_failures(checks: CheckResults) -> list[str]:
-    """Measured problems that fail a draft, phrased as instructions the reviser can act on."""
+    """Measured problems, phrased as instructions the reviser can act on. The eval's pass rule."""
+    return length_failures(checks) + avoid_failures(checks)
+
+
+def avoid_failures(checks: CheckResults) -> list[str]:
+    """Avoid-list hits: a hard failure, always."""
+    return [f"Avoid-list item found: '{term}'. Remove every trace of it, including synonyms." for term in checks.avoid_hits]
+
+
+def length_failures(checks: CheckResults) -> list[str]:
+    """Length outside the range: worth a revision, but not a quality problem (see pipeline.gate)."""
     failures = []
     if checks.word_count < checks.length_min:
         failures.append(
@@ -99,6 +111,4 @@ def check_failures(checks: CheckResults) -> list[str]:
             f"Too long: {checks.word_count} words. Shorten to {checks.length_min}-{checks.length_max} "
             f"(target {checks.length_target}) by tightening, keeping every beat and the calm ending."
         )
-    for term in checks.avoid_hits:
-        failures.append(f"Avoid-list item found: '{term}'. Remove every trace of it, including synonyms.")
     return failures

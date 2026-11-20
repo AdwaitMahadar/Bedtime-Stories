@@ -43,7 +43,7 @@ def age_band(age: int) -> str:
 ENERGY = {
     1: (
         "Energy 1/5 (very sleepy): almost no tension. A slow, dreamy, gentle journey; nothing urgent ever happens. "
-        "The main character still does the small, gentle thing that settles the story (a hum, a kind word, a found path)."
+        "The main character still does the small, gentle thing that settles the story."
     ),
     2: "Energy 2/5 (calm): low stakes and gentle pacing. A small puzzle or worry, no chases, no peril.",
     3: "Energy 3/5 (balanced): a clear problem with some mild excitement, resolved without real danger.",
@@ -103,7 +103,7 @@ def length_plan(controls: StoryControls) -> str:
     return (
         f"Total: {low}-{high} words (target {target}). This is measured in code, and a story outside the "
         f"range is sent back. Budget: about {per_beat} words for each of the {beats} beats, then about "
-        f"{closing} words for the calm closing. First drafts tend to run long, so aim for the target, not the maximum."
+        f"{closing} words for the calm closing. Reach the target: a story that ends early is sent back."
     )
 
 

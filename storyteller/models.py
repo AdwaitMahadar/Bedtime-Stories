@@ -1,7 +1,7 @@
 """Typed contracts passed between pipeline steps.
 
 Two kinds of models live here:
-- **LLM outputs** (StoryBrief, Draft, JudgeVerdict, FollowUpIntent): sent to the API as
+- **LLM outputs** (StoryBrief, Draft, JudgeVerdict with Issue, FollowUpIntent): sent to the API as
   JSON schemas, so their field descriptions double as instructions to the model.
 - **App state** (controls, profile, check results, rounds, versions, sessions, trace): built in code.
 """
@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Category = Literal[
     "adventure", "friendship", "funny", "animal", "fantasy", "everyday", "calm", "supportive"
@@ -39,7 +39,7 @@ class StoryControls(BaseModel):
     energy: int = Field(2, ge=1, le=5, description="1 = sleepy and calm, 5 = adventurous")
     silliness: int = Field(3, ge=1, le=5, description="1 = gentle, 5 = very silly")
     lesson: int = Field(2, ge=1, le=5, description="1 = just for fun, 5 = clear moral")
-    story_type: Optional[Category] = None  # None = let the analyzer choose
+    story_type: Optional[Category] = None  # None = let the writer choose
 
 
 class ChildProfile(BaseModel):
@@ -65,62 +65,94 @@ class StoryRequest(BaseModel):
         return self.profile.avoid if self.profile else []
 
 
+def tidy(text: Optional[str]) -> Optional[str]:
+    """Trim whitespace and stray closing brackets left over from the JSON output.
+
+    Seen in testing: a redirect message ended in "instead.}". A closing bracket is only removed when it has
+    no matching opening bracket in the text, so a story that really uses brackets is left alone.
+    """
+    if text is None:
+        return None
+    text = text.strip()
+    for close, open_ in (("}", "{"), ("]", "[")):
+        while text.endswith(close) and text.count(close) > text.count(open_):
+            text = text[:-1].rstrip()
+    return text
+
+
 # --- LLM outputs -----------------------------------------------------------------------------
 
 
-class Character(BaseModel):
-    name: str
-    description: str = Field(description="One short line: who they are and one memorable trait.")
-
-
 class StoryBrief(BaseModel):
-    """Analyzer output: what story to tell, and whether the request needed changes."""
+    """Request check output: whether to tell this story, and what must change first.
+
+    It plans nothing: the writer makes every creative choice and writes the parent's notes itself,
+    so the notes always describe the story that was actually written.
+    """
 
     status: Status = Field(
-        description="ok = fine as asked; adjusted = softened or changed to suit ages 5-10; "
+        description="ok = fine as asked; adjusted = needs softening to suit ages 5-10; "
         "out_of_scope = not a story request, or impossible to make child-appropriate."
     )
-    category: Category
-    premise: str = Field(description="One or two sentences: who the story is about and what happens.")
-    characters: list[Character]
-    setting: str
-    tone: str = Field(description="A few words, e.g. 'cozy and gently funny'.")
-    must_include: list[str] = Field(
-        description="Concrete elements from the request that the story must contain (names, animals, places, objects)."
-    )
-    favorites_to_use: list[str] = Field(
-        description="0-2 of the child's favorite things that fit this story naturally. Empty if none fit."
+    adjustments: list[str] = Field(
+        description="For adjusted: each change the story must make, one short sentence each "
+        "(what to soften and into what, keeping the spirit). Empty if the request is fine as asked."
     )
     sensitive_topic: Optional[str] = Field(
-        description="Set when the parent raises a real-life topic (new sibling, moving house, missing a pet...). Otherwise null."
+        description="Set when the parent raises a real-life situation (new sibling, moving house, missing a pet...). Otherwise null."
     )
-    adjustments: list[str] = Field(
-        description="Parent-facing notes, one friendly sentence each, explaining anything changed from the request. Empty if nothing changed."
-    )
-    assumptions: list[str] = Field(
-        description="Parent-facing notes on choices made because the request didn't specify them. Empty if the request was specific."
-    )
+    language: str = Field(description="ISO 639-1 code of the language the request is written in, e.g. 'en' or 'es'.")
     redirect_message: Optional[str] = Field(
         description="Only for out_of_scope: a warm one-or-two sentence reply that suggests a story idea instead. Otherwise null."
     )
 
+    @field_validator("redirect_message")
+    @classmethod
+    def _tidy_redirect(cls, value: Optional[str]) -> Optional[str]:
+        return tidy(value)
+
 
 class Draft(BaseModel):
-    title: str
+    # The story comes before the title: the model writes fields in order, and a title written first
+    # used a default name that the story then didn't use ("Biscuit Counts the Clouds" for a bunny called Pippin).
     text: str = Field(description="The full story as plain paragraphs separated by blank lines. No headings or markdown.")
+    title: str = Field(description="A short, warm title that fits the story above, using its characters' names.")
+    notes: list[str] = Field(
+        description="Only when something the parent asked for had to change: one short sentence per change, in the "
+        "story's language, saying what was done instead. Empty otherwise."
+    )
+
+    @field_validator("text", "title")
+    @classmethod
+    def _tidy_text(cls, value: str) -> str:
+        return tidy(value)
+
+    @field_validator("notes")
+    @classmethod
+    def _tidy_notes(cls, value: list[str]) -> list[str]:
+        return [tidy(note) for note in value if tidy(note)]
+
+
+IssueKind = Literal["safety", "consistency", "missing_request", "notes_mismatch", "stated_moral", "ending", "age"]
+
+
+class Issue(BaseModel):
+    """A concrete problem a parent would notice. Any issue sends the draft back for revision."""
+
+    kind: IssueKind
+    quote: str = Field(description="The exact words from the story or the parent notes that show the problem.")
+    fix: str = Field(description="A specific change that fixes it.")
 
 
 class CriterionScore(BaseModel):
     score: int = Field(ge=1, le=5)
-    evidence: str = Field(
-        description="For scores of 3 or less: an exact quote of the line at fault. Otherwise a short reason, or empty."
-    )
-    fix: str = Field(description="For scores of 3 or less: a specific, actionable fix. Otherwise empty.")
+    note: str = Field(description="One short reason for the score.")
 
 
 class JudgeVerdict(BaseModel):
-    """Judge output. One named field per criterion, so the schema guarantees none is skipped."""
+    """Judge output: the must-fix issues decide pass/fail; the scores are for display and the eval."""
 
+    issues: list[Issue] = Field(description="Every must-fix problem found. Empty if there are none.")
     age_fit: CriterionScore
     emotional_safety: CriterionScore
     story_arc: CriterionScore
@@ -128,7 +160,7 @@ class JudgeVerdict(BaseModel):
     control_match: CriterionScore
     engagement: CriterionScore
     bedtime_ending: CriterionScore
-    summary: str = Field(description="Two sentences: the story's biggest strength and its most important fix.")
+    summary: str = Field(description="Two sentences: the story's biggest strength and what would most improve it.")
 
     def scores(self) -> dict[str, CriterionScore]:
         return {name: getattr(self, name) for name in CRITERIA}
@@ -144,24 +176,26 @@ class JudgeVerdict(BaseModel):
 
 
 class FollowUpIntent(BaseModel):
-    """Follow-up router output: what the parent's change request means."""
+    """Follow-up router output: what kind of change this is. The parent's own words go to the reviser."""
 
     status: Status = Field(
-        description="ok = fine as asked; adjusted = the change was softened to suit ages 5-10; "
+        description="ok = fine as asked; adjusted = the change needs softening to suit ages 5-10; "
         "out_of_scope = not about the story, or impossible to make child-appropriate."
     )
     kind: Literal["edit", "new"] = Field(
         description="edit = change the current story; new = the parent wants a different story."
     )
-    instructions: str = Field(
-        description="For edit: a clear instruction for the reviser. For new: the new story request, written as a request."
-    )
     adjustments: list[str] = Field(
-        description="Parent-facing notes, one friendly sentence each, on anything softened. Empty if nothing changed."
+        description="For adjusted: what to soften in the requested change, one short sentence each. Otherwise empty."
     )
     redirect_message: Optional[str] = Field(
         description="Only for out_of_scope: a warm short reply steering back to the story. Otherwise null."
     )
+
+    @field_validator("redirect_message")
+    @classmethod
+    def _tidy_redirect(cls, value: Optional[str]) -> Optional[str]:
+        return tidy(value)
 
 
 # --- Built in code ---------------------------------------------------------------------------
@@ -177,7 +211,8 @@ class CheckResults(BaseModel):
     reading_grade: float
     grade_min: float
     grade_max: float
-    grade_ok: bool  # within the age band; a grade above it sends the draft back for simplifying
+    grade_ok: bool  # within the age band (display only; see checks.reading_level_note)
+    language: str = "en"  # the reading-level formula only works for English
     avoid_hits: list[str]
 
 
@@ -212,11 +247,17 @@ class RoundResult(BaseModel):
     draft: Draft
     checks: CheckResults
     verdict: JudgeVerdict
-    failures: list[str]  # why the gate failed; empty = passed
+    failures: list[str]  # problems that block "passed": issues, low scores, avoid-list, unchanged follow-up
+    soft_failures: list[str] = Field(default_factory=list)  # length or reading level: revised, but don't block
 
     @property
     def passed(self) -> bool:
         return not self.failures
+
+    @property
+    def clean(self) -> bool:
+        """Nothing at all left to fix."""
+        return not self.failures and not self.soft_failures
 
 
 class StoryVersion(BaseModel):
@@ -224,7 +265,7 @@ class StoryVersion(BaseModel):
     origin: str  # "initial request", or what the parent typed / clicked
     instruction: Optional[str] = None  # the revision instruction this version applied
     controls: StoryControls
-    notes: list[str] = Field(default_factory=list)  # adjustment notes shown to the parent
+    adjustments: list[str] = Field(default_factory=list)  # softening the follow-up router asked for
     rounds: list[RoundResult]
     best_round: int  # index into rounds
     stopped_early: Optional[str] = None  # set when the per-story budget ended the judge loop

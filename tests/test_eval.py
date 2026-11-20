@@ -2,7 +2,7 @@
 
 from eval.run_eval import render_report, render_stories, run_case
 
-from .fakes import FakeLLM, brief, draft, verdict
+from .fakes import FakeLLM, brief, draft, failing, verdict
 
 
 def test_run_case_scores_the_first_draft_and_the_final_story_with_fresh_judge_calls():
@@ -10,7 +10,7 @@ def test_run_case_scores_the_first_draft_and_the_final_story_with_fresh_judge_ca
         analyzer=[brief()],
         writer=[draft(600, word="first")],
         # judge calls in order: loop rounds 1-2, then the first-draft and final re-scores
-        judge=[verdict(3), verdict(4), verdict(3), verdict(5)],
+        judge=[failing(), verdict(4), failing("safety", "ending"), verdict(5)],
         reviser=[draft(600, word="final")],
     )
     case = {"id": "c1", "tag": "normal", "request": "Pip the mouse", "expected_status": "ok"}
@@ -18,12 +18,13 @@ def test_run_case_scores_the_first_draft_and_the_final_story_with_fresh_judge_ca
 
     assert set(result["variants"]) == {"first_draft", "final"}
     first, final = result["variants"]["first_draft"], result["variants"]["final"]
-    assert first["text"].startswith("first") and first["mean"] == 3 and not first["passed"]
-    assert final["text"].startswith("final") and final["mean"] == 5 and final["passed"]
+    assert first["text"].startswith("first") and first["issues"] == 2 and first["passed"] == 0
+    assert final["text"].startswith("final") and final["issues"] == 0 and final["passed"] == 1
     assert result["rounds"] == 2 and llm.counts["judge"] == 4
 
     report = render_report([result], "test", 3)
     assert "Writer only (no judge)" in report and "With judge loop" in report and "| c1 | normal | ok (ok)" in report
+    assert "Must-fix issues per story | 2.00 | 0.00" in report and "| safety | 1 | 0 |" in report
     stories = render_stories([result])
     assert "Writer only (no judge)" in stories and "With judge loop" in stories and "final is a pup" in stories
 
@@ -41,11 +42,11 @@ def test_multiple_judge_samples_are_averaged_and_agreement_is_measured():
     from eval.run_eval import score
     from storyteller.models import StoryRequest
 
-    llm = FakeLLM(judge=[verdict(4), verdict(3, 4, 4, 4, 4, 4, 4)])
+    llm = FakeLLM(judge=[verdict(4), failing("age")])
     result = score(llm, StoryRequest(text="Pip"), draft(600), trace=[], samples=2)
-    assert result["scores"]["age_fit"] == 3.5 and result["min"] == 3.5
-    assert not result["passed"]  # 3.5 average is below the bar
-    assert result["agreement"] == 6 / 7 and result["pass_flip"] is True
+    assert result["scores"]["age_fit"] == 4 and result["issues"] == 0.5
+    assert result["passed"] == 0.5  # one of the two calls found a must-fix issue
+    assert result["agreement"] == 1 and result["pass_flip"] is True
 
 
 def test_eval_judge_sees_the_same_adjustments_as_the_in_app_judge():

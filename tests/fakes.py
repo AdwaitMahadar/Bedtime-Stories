@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections import defaultdict, deque
 
 from storyteller.models import (
-    Character,
     CriterionScore,
     Draft,
     FollowUpIntent,
+    Issue,
     JudgeVerdict,
     StoryBrief,
     TraceEvent,
@@ -24,46 +24,41 @@ def words(n: int, word: str = "calm") -> str:
 def brief(status: str = "ok", **overrides) -> StoryBrief:
     data = dict(
         status=status,
-        category="animal",
-        premise="Pip the mouse looks for his lost blanket.",
-        characters=[Character(name="Pip", description="a small, brave mouse")],
-        setting="a cozy burrow",
-        tone="cozy and gently funny",
-        must_include=["Pip"],
-        favorites_to_use=[],
-        sensitive_topic=None,
         adjustments=[],
-        assumptions=[],
+        sensitive_topic=None,
+        language="en",
         redirect_message="Let's make a story instead!" if status == "out_of_scope" else None,
     )
     data.update(overrides)
     return StoryBrief(**data)
 
 
-def draft(n_words: int = 600, word: str = "calm", title: str = "Pip and the Blanket") -> Draft:
-    return Draft(title=title, text=words(n_words, word))
+def draft(n_words: int = 600, word: str = "calm", title: str = "Pip and the Blanket", notes=()) -> Draft:
+    return Draft(title=title, text=words(n_words, word), notes=list(notes))
 
 
-def verdict(*scores: int) -> JudgeVerdict:
-    """Seven scores in rubric order; one value means all seven get it."""
-    values = list(scores) * 7 if len(scores) == 1 else list(scores)
+def verdict(*scores: int, issues=()) -> JudgeVerdict:
+    """Seven scores in rubric order (one value means all seven get it), plus must-fix issues by kind."""
+    values = list(scores or (4,)) * 7 if len(scores) <= 1 else list(scores)
     names = [
         "age_fit", "emotional_safety", "story_arc", "request_match",
         "control_match", "engagement", "bedtime_ending",
     ]
-    fields = {
-        name: CriterionScore(score=v, evidence="\"quoted line\"" if v < 4 else "fine", fix="do X" if v < 4 else "")
-        for name, v in zip(names, values)
-    }
-    return JudgeVerdict(**fields, summary="Strength and fix.")
+    fields = {name: CriterionScore(score=v, note="reason") for name, v in zip(names, values)}
+    found = [Issue(kind=kind, quote="quoted line", fix="do X") for kind in issues]
+    return JudgeVerdict(issues=found, **fields, summary="Strength and fix.")
 
 
-def intent(kind: str = "edit", status: str = "ok", instructions: str = "Make it funnier.") -> FollowUpIntent:
+def failing(*kinds: str) -> JudgeVerdict:
+    """A verdict with good scores but must-fix issues (default: one consistency issue)."""
+    return verdict(4, issues=kinds or ("consistency",))
+
+
+def intent(kind: str = "edit", status: str = "ok", adjustments=()) -> FollowUpIntent:
     return FollowUpIntent(
         status=status,
         kind=kind,
-        instructions=instructions,
-        adjustments=[],
+        adjustments=list(adjustments),
         redirect_message="Let's get back to the story!" if status == "out_of_scope" else None,
     )
 

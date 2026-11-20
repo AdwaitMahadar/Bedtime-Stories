@@ -75,6 +75,13 @@ LESSON = {
 
 LENGTH_BEATS = {"short": 3, "medium": 4, "long": 5}
 
+# Short names for the slider positions in the UI (the same words as in the tables above).
+CONTROL_LABELS = {
+    "energy": {1: "Very sleepy", 2: "Calm", 3: "Balanced", 4: "Lively", 5: "Adventurous"},
+    "silliness": {1: "Gentle", 2: "Light", 3: "Playful", 4: "Funny", 5: "Very silly"},
+    "lesson": {1: "Just for fun", 2: "Light", 3: "Balanced", 4: "Clear", 5: "Explicit"},
+}
+
 
 def length_target(controls: StoryControls) -> int:
     return config.LENGTH_TARGETS[controls.length]

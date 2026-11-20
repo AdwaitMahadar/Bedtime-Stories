@@ -58,6 +58,16 @@ The difference shows what the judge loop adds. Every story is re-scored by **two
 
 Every model call is traced (time, step, attempt, tokens, latency, cost, stop reason, error) and saved as a JSON Lines log in `~/.bedtime-stories/logs/`. Logs hold call metadata only, never prompts, story text or child details. `python main.py --trace` prints the call timeline after each story, and the same data powers the app's "How this story was made" panel.
 
+## The app
+
+`streamlit run app.py` opens the story screen.
+- **The basics:** the parent types an idea or picks an example, adjusts the controls if they want, and watches each step live.
+- **The story view:** the story comes with any notes on what was changed or chosen, and a "Passed review" or "Best effort" badge.
+- **Follow-ups:** quick actions (Shorter, Funnier…), typed changes or new settings. Each one goes through the judge loop again and adds a version, and earlier versions stay readable.
+- **"How this story was made":** the plan, every review round with scores and quoted fixes, and every model call with its cost.
+
+The UI only displays results: the pipeline package is shared with the CLI, and the UI is tested headless with the same fake LLM as the pipeline.
+
 ## Safety and privacy
 
 - The API key comes only from the environment or `.env`. It's checked at startup and never stored or logged.
@@ -66,6 +76,6 @@ Every model call is traced (time, step, attempt, tokens, latency, cost, stop rea
 ## Known limitations
 
 - The same judge scores the stories it helped revise, and the prompts are tuned against that judge. The code checks and reading the stories ourselves are the counterweight.
-- With 13 scored cases, the judge's own noise (the two calls disagree on pass/fail for about 1 story in 4) is as large as many differences between versions. Mean scores and code checks are more reliable than pass rate.
+- With 13 scored cases, the judge's own noise is as large as many differences between versions. In the latest run, the two calls disagreed on pass/fail for 3 of 26 stories. Mean scores and code checks are more reliable than pass rate.
 - The app judges each round with one call, for speed, which is more lenient than the eval's averaged judging.
 - Reading-level formulas are noisy on children's stories, so reading level triggers a simplifying revision but isn't a quality score.

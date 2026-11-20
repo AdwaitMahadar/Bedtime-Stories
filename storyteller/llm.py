@@ -16,7 +16,7 @@ from typing import Literal, Optional, TypeVar
 
 import anthropic
 from anthropic import transform_schema
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 from pydantic import BaseModel, ValidationError
 
 from . import config
@@ -74,10 +74,13 @@ def describe_api_error(error: Exception) -> tuple[KeyProblemKind, str]:
 
 
 def load_api_key() -> Optional[str]:
-    """Read ANTHROPIC_API_KEY from the environment, falling back to the repo's `.env`."""
-    load_dotenv(config.REPO_ROOT / ".env")
-    key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-    return key or None
+    """Read ANTHROPIC_API_KEY from the environment, falling back to the repo's `.env`.
+
+    `.env` is re-read on every call and never copied into the environment, so the UI's Retry
+    button picks up a key that was just added or fixed, without a restart.
+    """
+    key = os.getenv("ANTHROPIC_API_KEY") or dotenv_values(config.REPO_ROOT / ".env").get("ANTHROPIC_API_KEY")
+    return (key or "").strip() or None
 
 
 @dataclass
